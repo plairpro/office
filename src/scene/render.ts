@@ -38,7 +38,7 @@ export class Renderer {
     r.shadowMap.enabled = true
     r.shadowMap.type = THREE.PCFShadowMap
     r.toneMapping = THREE.NeutralToneMapping
-    r.toneMappingExposure = 0.95
+    r.toneMappingExposure = 1.0
     host.appendChild(r.domElement)
     this.renderer = r
 
@@ -52,10 +52,10 @@ export class Renderer {
     scene.environmentIntensity = 0.42
     pmrem.dispose()
 
-    scene.add(new THREE.HemisphereLight(0xf4f0ff, 0xd8c8c0, 0.35))
+    scene.add(new THREE.HemisphereLight(0xfdfaff, 0xf0dbe6, 2.3))
 
     // солнце: светит снаружи через окна северной стены
-    const sun = new THREE.DirectionalLight(0xffe2c8, 4.0)
+    const sun = new THREE.DirectionalLight(0xfff0dd, 2.2)
     sun.position.copy(sunDir).multiplyScalar(45)
     sun.castShadow = true
     const sc = sun.shadow.camera

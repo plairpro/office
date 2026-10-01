@@ -386,15 +386,20 @@ function lounge(b: StaticBuilder, x: number, z: number): void {
   b.box(0.3, 0.02, 0.22, x - 0.2, 0.42, z + 0.1, 'matte', 0xd9534f, { rotY: 0.3 })
 }
 
+/** [x, z] + высота → аргументы (x, y, z) */
+function xyz([x, z]: [number, number], y: number): [number, number, number] {
+  return [x, y, z]
+}
+
 function sofa(b: StaticBuilder, x: number, z: number, rot: number): void {
   const cos = Math.cos(rot), sin = Math.sin(rot)
   const at = (lx: number, lz: number): [number, number] => [x + lx * cos + lz * sin, z - lx * sin + lz * cos]
   b.rbox(2.2, 0.38, 0.9, 0.08, x, 0.06, z, 'leather', P.leather, { rotY: rot, collide: true })
-  b.rbox(2.2, 0.45, 0.22, 0.08, ...at(0, -0.36), 0.4, 'leather', P.leather, { rotY: rot })
-  b.rbox(0.2, 0.25, 0.9, 0.07, ...at(-1.0, 0), 0.4, 'leather', P.leather, { rotY: rot })
-  b.rbox(0.2, 0.25, 0.9, 0.07, ...at(1.0, 0), 0.4, 'leather', P.leather, { rotY: rot })
-  for (const lx of [-0.5, 0.5]) b.rbox(0.92, 0.12, 0.62, 0.05, ...at(lx, 0.08), 0.44, 'leather', P.leather, { rotY: rot })
-  for (const lx of [-0.95, 0.95]) for (const lz of [-0.35, 0.35]) b.box(0.05, 0.06, 0.05, ...at(lx, lz), 0, 'metal', P.black, { rotY: rot })
+  b.rbox(2.2, 0.45, 0.22, 0.08, ...xyz(at(0, -0.36), 0.4), 'leather', P.leather, { rotY: rot })
+  b.rbox(0.2, 0.25, 0.9, 0.07, ...xyz(at(-1.0, 0), 0.4), 'leather', P.leather, { rotY: rot })
+  b.rbox(0.2, 0.25, 0.9, 0.07, ...xyz(at(1.0, 0), 0.4), 'leather', P.leather, { rotY: rot })
+  for (const lx of [-0.5, 0.5]) b.rbox(0.92, 0.12, 0.62, 0.05, ...xyz(at(lx, 0.08), 0.44), 'leather', P.leather, { rotY: rot })
+  for (const lx of [-0.95, 0.95]) for (const lz of [-0.35, 0.35]) b.box(0.05, 0.06, 0.05, ...xyz(at(lx, lz), 0), 'metal', P.black, { rotY: rot })
 }
 
 function waterCooler(b: StaticBuilder, x: number, z: number, radius: number): void {

@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import * as TX from './textures'
+import { toon } from './style'
 
 /** Прямоугольник препятствия на полу (вид сверху), центр + полуразмеры */
 export interface AABB {
@@ -27,45 +28,37 @@ let textures: ReturnType<typeof loadTextures> | null = null
 function loadTextures() {
   return {
     tile: TX.tileTexture(),
-    carpet: TX.carpetTexture(),
     wood: TX.woodTexture(),
-    darkwood: TX.woodTexture([196, 160, 128]),
-    marble: TX.marbleTexture(),
-    plaster: TX.plasterTexture(),
-    fabric: TX.fabricTexture(),
     screen: TX.screenTexture(),
   }
 }
 
-const std = (p: THREE.MeshStandardMaterialParameters) =>
-  new THREE.MeshStandardMaterial({ vertexColors: true, ...p })
+// Стилизация: toon-материалы с мягкими ступенями света, цвет — из вершин.
+// Никаких фототекстур: только плоский цвет и едва заметный рисунок плитки и дерева.
+const t = (p: THREE.MeshToonMaterialParameters = {}) => toon({ vertexColors: true, ...p })
 
 const KINDS: Record<Kind, KindDef> = {
-  paint: { scale: 2, castShadow: true, make: () => std({ map: textures!.plaster, roughness: 0.92 }) },
-  tile: { scale: 1.2, make: () => std({ map: textures!.tile, roughness: 0.32, metalness: 0 }) },
-  carpet: { scale: 2, make: () => std({ map: textures!.carpet, roughness: 1 }) },
-  wood: { scale: 1, castShadow: true, make: () => std({ map: textures!.wood, roughness: 0.55 }) },
-  darkwood: { scale: 1, castShadow: true, make: () => std({ map: textures!.darkwood, roughness: 0.5 }) },
-  marble: { scale: 1.4, castShadow: true, make: () => std({ map: textures!.marble, roughness: 0.18 }) },
-  metal: { castShadow: true, make: () => std({ roughness: 0.38, metalness: 0.85 }) },
-  chrome: { castShadow: true, make: () => std({ roughness: 0.12, metalness: 1 }) },
-  plastic: { castShadow: true, make: () => std({ roughness: 0.42 }) },
-  matte: { castShadow: true, make: () => std({ roughness: 0.85 }) },
-  fabric: { scale: 0.25, castShadow: true, make: () => std({ map: textures!.fabric, roughness: 1 }) },
-  leather: { castShadow: true, make: () => std({ roughness: 0.45 }) },
-  foliage: { castShadow: true, make: () => std({ roughness: 0.6, side: THREE.DoubleSide }) },
+  paint: { castShadow: true, make: () => t() },
+  tile: { scale: 1.6, make: () => t({ map: textures!.tile }) },
+  carpet: { make: () => t() },
+  wood: { scale: 1.2, castShadow: true, make: () => t({ map: textures!.wood }) },
+  darkwood: { scale: 1.2, castShadow: true, make: () => t({ map: textures!.wood, color: 0xc9a98e }) },
+  marble: { castShadow: true, make: () => t() },
+  metal: { castShadow: true, make: () => t() },
+  chrome: { castShadow: true, make: () => t({ emissive: 0x222233 }) },
+  plastic: { castShadow: true, make: () => t() },
+  matte: { castShadow: true, make: () => t() },
+  fabric: { castShadow: true, make: () => t() },
+  leather: { castShadow: true, make: () => t() },
+  foliage: { castShadow: true, make: () => t({ side: THREE.DoubleSide }) },
   glass: {
-    make: () => new THREE.MeshPhysicalMaterial({
-      vertexColors: true, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.22,
-      depthWrite: false, envMapIntensity: 1.6, side: THREE.DoubleSide,
+    make: () => new THREE.MeshBasicMaterial({
+      vertexColors: true, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide,
     }),
   },
   screen: {
     ownUV: true,
-    make: () => new THREE.MeshStandardMaterial({
-      vertexColors: true, map: textures!.screen, emissive: 0xffffff, emissiveMap: textures!.screen,
-      emissiveIntensity: 1.6, roughness: 0.25,
-    }),
+    make: () => new THREE.MeshBasicMaterial({ vertexColors: true, map: textures!.screen, toneMapped: false }),
   },
   // цвет ×1.8 — ярче единицы, только эти поверхности светятся в bloom
   light: { make: () => new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, color: new THREE.Color(1.8, 1.8, 1.8) }) },
@@ -87,7 +80,10 @@ export class StaticBuilder {
   constructor() { textures ??= loadTextures() }
 
   box(w: number, h: number, d: number, x: number, y: number, z: number, kind: Kind, hex = 0xffffff, o: Opts = {}): void {
-    this.add(new THREE.BoxGeometry(w, h, d), x, y + h / 2, z, kind, hex, o)
+    // все грани чуть скруглены — мягкий «игрушечный» вид вместо острых кубов
+    const r = Math.min(0.045, Math.min(w, h, d) * 0.3)
+    const g = r > 0.006 ? new RoundedBoxGeometry(w, h, d, 2, r) : new THREE.BoxGeometry(w, h, d)
+    this.add(g, x, y + h / 2, z, kind, hex, o)
     if (o.collide) this.collideBox(w, d, x, z, o.rotY ?? 0)
   }
 

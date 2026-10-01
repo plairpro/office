@@ -27,35 +27,19 @@ function rng(seed: number): () => number {
   }
 }
 
-/** Светлый керамогранит 60×60 с тонкими швами. Текстура = 2×2 плитки = 1.2 м */
+/** Плитка: плоский цвет и мягкие швы. Текстура = 2×2 плитки */
 export function tileTexture(): THREE.CanvasTexture {
-  const S = 1024
+  const S = 256
   const [c, g] = canvas(S)
-  const r = rng(7)
-  const n = 2
-  const step = S / n
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) {
-      const v = 240 + Math.floor(r() * 8)
-      g.fillStyle = `rgb(${v},${v - 2},${v - 6})`
-      g.fillRect(i * step, j * step, step, step)
-      // лёгкие разводы камня
-      for (let k = 0; k < 220; k++) {
-        const a = r() * 0.05
-        g.fillStyle = r() < 0.5 ? `rgba(255,255,255,${a})` : `rgba(160,150,170,${a * 0.6})`
-        const s = 4 + r() * 40
-        g.beginPath()
-        g.ellipse(i * step + r() * step, j * step + r() * step, s, s * (0.3 + r()), r() * 3, 0, Math.PI * 2)
-        g.fill()
-      }
-    }
-  }
-  g.strokeStyle = 'rgba(190,180,200,0.7)'
+  g.fillStyle = '#ffffff'
+  g.fillRect(0, 0, S, S)
+  g.fillStyle = 'rgba(246,242,250,1)'
+  g.fillRect(0, 0, S / 2, S / 2)
+  g.fillRect(S / 2, S / 2, S / 2, S / 2)
+  g.strokeStyle = 'rgba(226,220,238,1)'
   g.lineWidth = 3
-  for (let i = 0; i <= n; i++) {
-    g.beginPath(); g.moveTo(i * step, 0); g.lineTo(i * step, S); g.stroke()
-    g.beginPath(); g.moveTo(0, i * step); g.lineTo(S, i * step); g.stroke()
-  }
+  g.strokeRect(0, 0, S, S)
+  g.beginPath(); g.moveTo(S / 2, 0); g.lineTo(S / 2, S); g.moveTo(0, S / 2); g.lineTo(S, S / 2); g.stroke()
   return finish(c)
 }
 
@@ -81,26 +65,14 @@ export function carpetTexture(): THREE.CanvasTexture {
   return finish(c)
 }
 
-/** Дерево: дубовый шпон с волокнами. Текстура = 1 м, волокна вдоль X */
-export function woodTexture(base = [232, 206, 172]): THREE.CanvasTexture {
-  const S = 512
+/** Дерево: плоский светлый цвет с редкими мягкими полосами */
+export function woodTexture(): THREE.CanvasTexture {
+  const S = 256
   const [c, g] = canvas(S)
-  const r = rng(23 + base[0])
-  g.fillStyle = `rgb(${base[0]},${base[1]},${base[2]})`
+  g.fillStyle = '#ecd2b0'
   g.fillRect(0, 0, S, S)
-  for (let y = 0; y < S; y++) {
-    const w = Math.sin(y * 0.09 + Math.sin(y * 0.013) * 4) * 0.5 + 0.5
-    const a = 0.05 + w * 0.12 + r() * 0.03
-    g.fillStyle = `rgba(150,100,60,${a * 0.6})`
-    g.fillRect(0, y, S, 1)
-  }
-  for (let k = 0; k < 900; k++) {
-    g.fillStyle = `rgba(140,90,50,${r() * 0.08})`
-    g.fillRect(r() * S, r() * S, 10 + r() * 80, 1)
-  }
-  // стыки досок
-  g.fillStyle = 'rgba(120,80,50,0.18)'
-  for (let i = 0; i < 4; i++) g.fillRect(0, i * 128, S, 2)
+  g.fillStyle = 'rgba(214,180,140,0.55)'
+  for (const y of [30, 34, 96, 150, 154, 210]) g.fillRect(0, y, S, 3)
   return finish(c)
 }
 
