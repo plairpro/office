@@ -6,10 +6,22 @@ import { Avatar, stepBody, type Body } from './game/avatar'
 import { Input } from './game/input'
 import { NetRoom, makeRoomCode, readRoomCode, type StatePacket } from './net/room'
 import { $, showToast, loadName, saveName, loadPref, savePref } from './ui/dom'
+import { loadAssets } from './assets'
 
 // ---------- рендер ----------
 
 const host = $('game')
+
+// ---------- загрузка моделей ----------
+const mainBtn = $('btn-main') as HTMLButtonElement
+const soloBtn = $('btn-solo') as HTMLButtonElement
+const mainLabel = mainBtn.textContent
+mainBtn.disabled = soloBtn.disabled = true
+mainBtn.textContent = 'Загружаем офис… 0%'
+await loadAssets((p) => { mainBtn.textContent = `Загружаем офис… ${Math.round(p * 100)}%` })
+mainBtn.textContent = mainLabel
+mainBtn.disabled = soloBtn.disabled = false
+
 const office = buildOffice()
 const camera = new THREE.PerspectiveCamera(GAME.camera.fov, 1, 0.5, 120)
 const gfx = new Renderer(host, camera, office.sunDir)

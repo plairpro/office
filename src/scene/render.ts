@@ -49,13 +49,13 @@ export class Renderer {
     // мягкий свет «комнаты» — даёт объём и отражения на PBR-материалах
     const pmrem = new THREE.PMREMGenerator(r)
     scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
-    scene.environmentIntensity = 0.42
+    scene.environmentIntensity = 0.55
     pmrem.dispose()
 
-    scene.add(new THREE.HemisphereLight(0xfdfaff, 0xf0dbe6, 2.3))
+    scene.add(new THREE.HemisphereLight(0xfdfaff, 0xf0dbe6, 1.5))
 
     // солнце: светит снаружи через окна северной стены
-    const sun = new THREE.DirectionalLight(0xfff0dd, 2.2)
+    const sun = new THREE.DirectionalLight(0xfff0dd, 3.2)
     sun.position.copy(sunDir).multiplyScalar(45)
     sun.castShadow = true
     const sc = sun.shadow.camera
@@ -72,7 +72,7 @@ export class Renderer {
       new THREE.BoxGeometry(41, 0.2, 31),
       new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }),
     )
-    ceiling.position.y = 3.3
+    ceiling.position.y = 2.86
     ceiling.castShadow = true
     scene.add(ceiling)
   }

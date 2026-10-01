@@ -2,7 +2,6 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import * as TX from './textures'
-import { toon } from './style'
 
 /** Прямоугольник препятствия на полу (вид сверху), центр + полуразмеры */
 export interface AABB {
@@ -33,27 +32,27 @@ function loadTextures() {
   }
 }
 
-// Стилизация: toon-материалы с мягкими ступенями света, цвет — из вершин.
-// Никаких фототекстур: только плоский цвет и едва заметный рисунок плитки и дерева.
-const t = (p: THREE.MeshToonMaterialParameters = {}) => toon({ vertexColors: true, ...p })
+// Мягкие матовые материалы в тон ассетам KayKit: плоский цвет из вершин
+const t = (p: THREE.MeshStandardMaterialParameters = {}) =>
+  new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0, ...p })
 
 const KINDS: Record<Kind, KindDef> = {
   paint: { castShadow: true, make: () => t() },
-  tile: { scale: 1.6, make: () => t({ map: textures!.tile }) },
-  carpet: { make: () => t() },
+  tile: { scale: 1.6, make: () => t({ map: textures!.tile, roughness: 0.6 }) },
+  carpet: { make: () => t({ roughness: 1 }) },
   wood: { scale: 1.2, castShadow: true, make: () => t({ map: textures!.wood }) },
   darkwood: { scale: 1.2, castShadow: true, make: () => t({ map: textures!.wood, color: 0xc9a98e }) },
-  marble: { castShadow: true, make: () => t() },
-  metal: { castShadow: true, make: () => t() },
-  chrome: { castShadow: true, make: () => t({ emissive: 0x222233 }) },
-  plastic: { castShadow: true, make: () => t() },
+  marble: { castShadow: true, make: () => t({ roughness: 0.35 }) },
+  metal: { castShadow: true, make: () => t({ roughness: 0.5, metalness: 0.3 }) },
+  chrome: { castShadow: true, make: () => t({ roughness: 0.25, metalness: 0.7 }) },
+  plastic: { castShadow: true, make: () => t({ roughness: 0.55 }) },
   matte: { castShadow: true, make: () => t() },
-  fabric: { castShadow: true, make: () => t() },
-  leather: { castShadow: true, make: () => t() },
+  fabric: { castShadow: true, make: () => t({ roughness: 1 }) },
+  leather: { castShadow: true, make: () => t({ roughness: 0.6 }) },
   foliage: { castShadow: true, make: () => t({ side: THREE.DoubleSide }) },
   glass: {
-    make: () => new THREE.MeshBasicMaterial({
-      vertexColors: true, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide,
+    make: () => new THREE.MeshStandardMaterial({
+      vertexColors: true, transparent: true, opacity: 0.25, roughness: 0.05, depthWrite: false, side: THREE.DoubleSide,
     }),
   },
   screen: {

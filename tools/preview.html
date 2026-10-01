@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#e9e6f2}</style></head>
+<body><script type="module">
+import * as THREE from 'three'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
+const r = new THREE.WebGLRenderer({antialias:true}); r.setSize(innerWidth, innerHeight); document.body.appendChild(r.domElement)
+r.shadowMap.enabled = true
+const s = new THREE.Scene(); s.background = new THREE.Color(0xe9e6f2)
+s.add(new THREE.HemisphereLight(0xffffff, 0xd8c8e0, 2.2))
+const sun = new THREE.DirectionalLight(0xffffff, 2); sun.position.set(-4,8,6); sun.castShadow=true; s.add(sun)
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(40,40), new THREE.MeshStandardMaterial({color:0xf4f0f8})); ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; s.add(ground)
+const cam = new THREE.PerspectiveCamera(30, innerWidth/innerHeight, .1, 100); cam.position.set(0, 7, 16); cam.lookAt(0,1.2,0)
+const L = new GLTFLoader(); L.setMeshoptDecoder(MeshoptDecoder)
+const mode = new URLSearchParams(location.search).get('m') || 'chars'
+const anims = (await L.loadAsync('/assets/char_anims.glb')).animations
+const mixers=[]
+if (mode==='chars') {
+  const names=['knight','barbarian','mage','rogue','rogue_hooded']
+  for (let i=0;i<names.length;i++){
+    const g=await L.loadAsync(`/assets/char_${names[i]}.glb`)
+    const o=g.scene; o.position.x=(i-2)*2.2; o.traverse(m=>{if(m.isMesh){m.castShadow=true}})
+    s.add(o)
+    const mx=new THREE.AnimationMixer(o); mx.clipAction(anims.find(a=>a.name==='Idle')).play(); mixers.push(mx)
+  }
+} else {
+  const pack = await L.loadAsync(`/assets/${mode}.glb`)
+  const kids=[...pack.scene.children]; const cols=Math.ceil(Math.sqrt(kids.length))
+  kids.forEach((k,i)=>{ k.position.set((i%cols-cols/2)*3.2, 0, (Math.floor(i/cols)-cols/2)*3.2); k.traverse(m=>{if(m.isMesh){m.castShadow=true;m.receiveShadow=true}}) })
+  pack.scene.children.forEach(()=>{}); s.add(pack.scene)
+  cam.position.set(0, 28, 30); cam.lookAt(0,0,0)
+}
+const clock=new THREE.Clock()
+function f(){ const dt=clock.getDelta(); mixers.forEach(m=>m.update(dt)); r.render(s,cam); requestAnimationFrame(f)}; f()
+window.__ready=true
+</script></body></html>

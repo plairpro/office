@@ -33,10 +33,10 @@ export function tileTexture(): THREE.CanvasTexture {
   const [c, g] = canvas(S)
   g.fillStyle = '#ffffff'
   g.fillRect(0, 0, S, S)
-  g.fillStyle = 'rgba(246,242,250,1)'
+  g.fillStyle = 'rgba(250,247,251,1)'
   g.fillRect(0, 0, S / 2, S / 2)
   g.fillRect(S / 2, S / 2, S / 2, S / 2)
-  g.strokeStyle = 'rgba(226,220,238,1)'
+  g.strokeStyle = 'rgba(232,226,240,1)'
   g.lineWidth = 3
   g.strokeRect(0, 0, S, S)
   g.beginPath(); g.moveTo(S / 2, 0); g.lineTo(S / 2, S); g.moveTo(0, S / 2); g.lineTo(S, S / 2); g.stroke()

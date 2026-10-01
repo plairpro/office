@@ -217,3 +217,5 @@ html, body {
 @media (min-width: 900px) {
   #menu { justify-items: start; padding-left: 7vw; background: linear-gradient(90deg, rgba(217,220,239,0.85) 0%, rgba(217,220,239,0.4) 45%, rgba(217,220,239,0) 70%); }
 }
+
+.btn:disabled { opacity: 0.7; cursor: progress; }

@@ -1,256 +1,362 @@
 import * as THREE from 'three'
-import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
 import type { AABB } from '../scene/builder'
 import { GAME, CHARACTERS, type CharacterId } from '../config/game'
-import { toon, outlineMaterial, addOutlines } from '../scene/style'
+import { getAssets, type BaseChar } from '../assets'
 
-const SKIN = [0xffd9c2, 0xf6c3a0, 0xd9a07c, 0xa8704f]
-const SCALE = 1.25 // мультяшные пропорции ниже ростом — увеличиваем для читаемости сверху
-const OUTLINE = outlineMaterial(0x3d3557, 0.012)
+// ======================================================================
+// Офисные персонажи на базе CC0-героев KayKit: та же модель и 27 анимаций,
+// но одежда перекрашена в атласе (отдельно для торса, рук и ног), оружие и
+// доспехи убраны, добавлены аксессуары на костях (очки, кепка, пицца, галстук).
+// ======================================================================
 
-type Mat = THREE.MeshToonMaterial
-const mat = (hex: number): Mat => toon({ color: hex })
+const HEIGHT = 1.85 // рост в метрах после масштабирования
 
-interface Rig {
-  body: THREE.Group
-  legL: THREE.Object3D
-  legR: THREE.Object3D
-  armL: THREE.Object3D
-  armR: THREE.Object3D
-  tinted: Mat[]
-  height: number
+type Group = 'Body' | 'Arm' | 'Leg' | 'Head'
+/** Прямоугольник ячеек атласа 64×64 (включительно) → новый цвет. 'P' = цвет игрока */
+type Rule = [x0: number, y0: number, x1: number, y1: number, color: number | 'P' | 'P+']
+type Look = { base: BaseChar; rules: Partial<Record<Group, Rule[]>>; accessories: (rig: Rig, color: number) => void }
+
+const SKIN = 0xf5c4a0
+const INK = 0x3d3557
+
+const LOOKS: Record<CharacterId, Look> = {
+  // Курьер ← рыцарь: поло цвета игрока, джинсы, кеды, кепка, коробка пиццы
+  courier: {
+    base: 'knight',
+    rules: {
+      Body: [[6, 0, 9, 3, 'P'], [14, 0, 15, 2, 'P+'], [12, 0, 13, 3, 0x6b5a6e], [0, 4, 3, 7, 0xffffff],
+        [4, 4, 5, 6, 'P'], [14, 5, 15, 7, 0x6b5a6e]],
+      Arm: [[6, 0, 9, 3, 'P'], [14, 0, 15, 2, 'P+'], [12, 0, 13, 3, SKIN]],
+      Leg: [[6, 0, 9, 3, 0x7d9fd9], [14, 0, 15, 2, 0x8fb0e6], [12, 0, 13, 3, 0x7d9fd9], [14, 5, 15, 7, 0xf7f7fb]],
+    },
+    accessories: (rig, color) => { cap(rig, color); pizza(rig) },
+  },
+  // Босс ← варвар: белая рубашка, подтяжки цвета игрока, тёмные брюки, лысина и седая борода
+  boss: {
+    base: 'barbarian',
+    rules: {
+      Body: [[0, 4, 3, 7, 0xfbfaf6], [4, 4, 5, 7, 0xf1f0ec], [12, 0, 13, 3, 'P'], [14, 0, 15, 3, 0x55597a],
+        [6, 0, 7, 3, 0xe0bf6a], [14, 5, 15, 6, 0x55597a]],
+      Arm: [[0, 4, 3, 7, 0xfbfaf6], [4, 4, 5, 7, 0xf1f0ec], [12, 0, 13, 3, 0xfbfaf6], [14, 9, 15, 11, 0xfbfaf6]],
+      Leg: [[6, 8, 7, 11, 0x55597a], [4, 4, 5, 7, INK], [14, 5, 15, 6, INK]],
+    },
+    accessories: (rig, color) => tie(rig, color),
+  },
+  // Бухгалтерша ← маг: седое каре, кардиган цвета игрока, блузка, юбка, огромные очки
+  accountant: {
+    base: 'mage',
+    rules: {
+      Body: [[0, 4, 1, 6, 'P'], [6, 0, 9, 3, 0xfaf3ea], [10, 0, 11, 3, 0x7a5c6e], [4, 8, 4, 11, 0x9a94bd],
+        [14, 4, 15, 7, 0x77729a]],
+      Arm: [[0, 4, 1, 6, 'P'], [6, 0, 9, 3, 0xfaf3ea]],
+      Leg: [[6, 8, 7, 11, 0x5a4250], [14, 4, 15, 7, 0x77729a]],
+      Head: [[2, 0, 3, 2, 0xdcdae6], [2, 5, 3, 6, 'P']],
+    },
+    accessories: (rig) => glasses(rig),
+  },
+  // Секретарша ← разбойница: платье цвета игрока, тонкий пояс, каблуки
+  secretary: {
+    base: 'rogue',
+    rules: {
+      Body: [[0, 4, 3, 7, 'P'], [10, 0, 11, 2, INK], [12, 0, 13, 3, INK], [6, 0, 7, 2, 0xe8c56a], [14, 6, 15, 7, 'P']],
+      Arm: [[0, 4, 3, 7, 'P'], [10, 0, 11, 2, SKIN], [10, 9, 11, 11, SKIN]],
+      Leg: [[14, 6, 15, 7, SKIN], [6, 8, 7, 10, 0xe0457b]],
+    },
+    accessories: () => {},
+  },
 }
 
-// ---------- примитивы ----------
+// ---------- перекраска атласа ----------
 
-function mesh(g: THREE.BufferGeometry, m: THREE.Material, x = 0, y = 0, z = 0): THREE.Mesh {
-  const o = new THREE.Mesh(g, m)
-  o.position.set(x, y, z)
-  o.castShadow = true
-  return o
+function lighten(hex: number, k: number): number {
+  const c = new THREE.Color(hex)
+  c.lerp(new THREE.Color(0xffffff), k)
+  return c.getHex()
 }
 
-const capsule = (r: number, len: number, m: Mat, x = 0, y = 0, z = 0) =>
-  mesh(new THREE.CapsuleGeometry(r, len, 5, 14), m, x, y, z)
-
-const rbox = (w: number, h: number, d: number, r: number, m: Mat, x = 0, y = 0, z = 0) =>
-  mesh(new RoundedBoxGeometry(w, h, d, 4, Math.min(r, w / 2, h / 2, d / 2)), m, x, y, z)
-
-function blob(rx: number, ry: number, rz: number, m: THREE.Material, x = 0, y = 0, z = 0): THREE.Mesh {
-  const g = new THREE.SphereGeometry(1, 24, 16)
-  g.scale(rx, ry, rz)
-  return mesh(g, m, x, y, z)
-}
-
-/** Верх сферы: причёска, кепка */
-function dome(r: number, m: Mat, x: number, y: number, z: number, thetaLen = Math.PI * 0.55, sy = 1): THREE.Mesh {
-  const g = new THREE.SphereGeometry(r, 24, 14, 0, Math.PI * 2, 0, thetaLen)
-  g.scale(1, sy, 1)
-  return mesh(g, m, x, y, z)
-}
-
-/** Короткая пухлая конечность с опорой сверху */
-function limb(r: number, len: number, m: Mat, x: number, y: number, end?: THREE.Object3D): THREE.Group {
-  const g = new THREE.Group()
-  g.position.set(x, y, 0)
-  g.add(capsule(r, len, m, 0, -len / 2, 0))
-  if (end) { end.position.y -= len + r * 0.6; g.add(end) }
-  return g
-}
-
-const shoe = (w: number, l: number, m: Mat) => rbox(w, 0.08, l, 0.035, m, 0, 0.02, 0.035)
-
-/** Голова-шар с глазами-бусинками и румянцем */
-function head(skinHex: number, y: number, r: number, opts: { blush?: boolean } = {}): THREE.Object3D[] {
-  const skin = mat(skinHex)
-  const eye = new THREE.MeshBasicMaterial({ color: 0x2d2640 })
-  const shine = new THREE.MeshBasicMaterial({ color: 0xffffff })
-  const z = r * 0.9
-  const parts: THREE.Object3D[] = [
-    capsule(r * 0.32, r * 0.2, skin, 0, y - r * 0.95, 0), // шея
-    blob(r, r * 0.95, r * 0.92, skin, 0, y, 0),
-  ]
-  for (const sx of [-1, 1]) {
-    const e = blob(r * 0.11, r * 0.15, r * 0.06, eye, sx * r * 0.36, y + r * 0.02, z)
-    e.userData.noOutline = true
-    const h = blob(r * 0.04, r * 0.04, r * 0.02, shine, sx * r * 0.36 + r * 0.03, y + r * 0.08, z + r * 0.04)
-    h.userData.noOutline = true
-    parts.push(e, h)
-    if (opts.blush !== false) {
-      const b = blob(r * 0.12, r * 0.07, r * 0.03, new THREE.MeshBasicMaterial({ color: 0xffa3b5, transparent: true, opacity: 0.75 }),
-        sx * r * 0.55, y - r * 0.2, z * 0.93)
-      b.rotation.y = sx * 0.5
-      b.userData.noOutline = true
-      parts.push(b)
+/** Перекрашивает области атласа, сохраняя градиент объёма внутри ячеек */
+function recolor(src: THREE.Texture, rules: Rule[], player: number): THREE.Texture {
+  const img = src.image as ImageBitmap | HTMLImageElement | HTMLCanvasElement
+  const S = 512 // атлас из плоских ячеек — половинного размера хватает
+  const k = S / 1024
+  const c = document.createElement('canvas')
+  c.width = c.height = S
+  const g = c.getContext('2d')!
+  g.drawImage(img, 0, 0, S, S)
+  const data = g.getImageData(0, 0, S, S)
+  const px = data.data
+  const tmp = new THREE.Color()
+  for (const [x0, y0, x1, y1, col] of rules) {
+    const hex = col === 'P' ? player : col === 'P+' ? lighten(player, 0.35) : col
+    tmp.setHex(hex)
+    const tr = tmp.r * 255, tg = tmp.g * 255, tb = tmp.b * 255
+    const X0 = x0 * 64 * k, Y0 = y0 * 64 * k, X1 = (x1 + 1) * 64 * k, Y1 = (y1 + 1) * 64 * k
+    // средняя яркость области — опорная
+    let sum = 0, n = 0
+    for (let y = Y0; y < Y1; y++) for (let x = X0; x < X1; x++) {
+      const i = (y * S + x) * 4
+      sum += 0.3 * px[i] + 0.59 * px[i + 1] + 0.11 * px[i + 2]; n++
+    }
+    const mean = Math.max(sum / n, 1)
+    for (let y = Y0; y < Y1; y++) for (let x = X0; x < X1; x++) {
+      const i = (y * S + x) * 4
+      const l = (0.3 * px[i] + 0.59 * px[i + 1] + 0.11 * px[i + 2]) / mean
+      const f = 0.55 + 0.45 * l // смягчаем перепад: пастель, а не контраст
+      px[i] = Math.min(255, tr * f)
+      px[i + 1] = Math.min(255, tg * f)
+      px[i + 2] = Math.min(255, tb * f)
     }
   }
-  return parts
+  g.putImageData(data, 0, 0)
+  const t = new THREE.CanvasTexture(c)
+  t.flipY = src.flipY
+  t.colorSpace = THREE.SRGBColorSpace
+  t.magFilter = THREE.NearestFilter // ячейки атласа не должны размываться на швах
+  t.minFilter = THREE.LinearMipmapLinearFilter
+  return t
 }
 
-// ---------- персонажи ----------
+function groupOf(meshName: string): Group {
+  if (/Arm/.test(meshName)) return 'Arm'
+  if (/Leg/.test(meshName)) return 'Leg'
+  if (/Head/.test(meshName)) return 'Head'
+  return 'Body'
+}
 
-/** Бухгалтерша: худая, высокая, седой пучок, огромные очки, юбка-карандаш */
-function buildAccountant(color: number, skinHex: number): Rig {
-  const cardigan = mat(color)
-  const skirt = mat(0x6e6a8f)
-  const legs = mat(0xd9b49a)
-  const hair = mat(0xdcdbe6)
-  const heels = mat(0x5a4250)
-  const frame = new THREE.MeshBasicMaterial({ color: 0x3d3557 })
-  const body = new THREE.Group()
-  const legL = limb(0.045, 0.34, legs, -0.06, 0.46, shoe(0.08, 0.15, heels))
-  const legR = limb(0.045, 0.34, legs, 0.06, 0.46, shoe(0.08, 0.15, heels))
-  const armL = limb(0.045, 0.3, cardigan, -0.17, 0.86, blob(0.045, 0.05, 0.045, mat(skinHex)))
-  const armR = limb(0.045, 0.3, cardigan, 0.17, 0.86, blob(0.045, 0.05, 0.045, mat(skinHex)))
-  const glasses = (x: number) => {
-    const m = mesh(new THREE.TorusGeometry(0.055, 0.011, 8, 20), frame, x, 1.13, 0.17)
-    m.userData.noOutline = true
-    return m
+// ---------- аксессуары ----------
+
+interface Rig {
+  /** габариты части тела в пространстве модели (поза покоя, до масштабирования) */
+  box(part: string): THREE.Box3
+  /** крепит объект к кости; position — точка в пространстве модели, объект смотрит вперёд модели */
+  attach(boneName: string, o: THREE.Object3D, position: THREE.Vector3): void
+  disposables: (THREE.BufferGeometry | THREE.Material | THREE.Texture)[]
+}
+
+const mat = (hex: number, rig: Rig) => {
+  const m = new THREE.MeshStandardMaterial({ color: hex, roughness: 0.75 })
+  rig.disposables.push(m)
+  return m
+}
+const geo = <G extends THREE.BufferGeometry>(g: G, rig: Rig): G => { rig.disposables.push(g); return g }
+
+function glasses(rig: Rig): void {
+  const b = rig.box('Head')
+  const w = b.max.x - b.min.x
+  const frame = mat(0x3d3557, rig)
+  const lens = new THREE.MeshStandardMaterial({ color: 0xdff2ff, transparent: true, opacity: 0.35, roughness: 0.1 })
+  rig.disposables.push(lens)
+  const g = new THREE.Group()
+  const r = w * 0.15
+  const ring = geo(new THREE.TorusGeometry(r, r * 0.16, 8, 24), rig)
+  const disc = geo(new THREE.CircleGeometry(r, 24), rig)
+  for (const sx of [-1, 1]) {
+    const o = new THREE.Mesh(ring, frame); o.position.x = sx * r * 1.15; g.add(o)
+    const l = new THREE.Mesh(disc, lens); l.position.x = sx * r * 1.15; g.add(l)
   }
-  body.add(
-    legL, legR, armL, armR,
-    mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.26, 20), skirt, 0, 0.5, 0),
-    rbox(0.26, 0.36, 0.17, 0.08, cardigan, 0, 0.78, 0),
-    rbox(0.09, 0.04, 0.03, 0.015, mat(0xffffff), 0, 0.95, 0.08),
-    ...head(skinHex, 1.13, 0.19, { blush: false }),
-    dome(0.2, hair, 0, 1.14, -0.01, Math.PI * 0.58, 1.05),
-    blob(0.1, 0.09, 0.09, hair, 0, 1.36, -0.08), // пучок
-    glasses(-0.07), glasses(0.07),
-    blob(0.07, 0.012, 0.012, frame, 0, 1.14, 0.175),
-    rbox(0.07, 0.012, 0.01, 0.005, mat(0xb0566a), 0, 1.03, 0.175), // поджатые губы
-  )
-  return { body, legL, legR, armL, armR, tinted: [cardigan], height: 1.45 }
+  const bridge = new THREE.Mesh(geo(new THREE.BoxGeometry(r * 0.5, r * 0.15, r * 0.15), rig), frame)
+  g.add(bridge)
+  rig.attach('head', g, new THREE.Vector3(0, b.min.y + (b.max.y - b.min.y) * 0.45, b.max.z + r * 0.1))
 }
 
-/** Босс: шар в белой рубашке, подтяжки и галстук цвета игрока, лысина, усы */
-function buildBoss(color: number, skinHex: number): Rig {
-  const shirt = mat(0xfdfcf8)
-  const accent = mat(color)
-  const pants = mat(0x5b5f80)
-  const shoes = mat(0x3d3557)
-  const hair = mat(0x8f8aa3)
-  const body = new THREE.Group()
-  const legL = limb(0.075, 0.2, pants, -0.12, 0.36, shoe(0.13, 0.2, shoes))
-  const legR = limb(0.075, 0.2, pants, 0.12, 0.36, shoe(0.13, 0.2, shoes))
-  const armL = limb(0.065, 0.26, shirt, -0.33, 0.82, blob(0.06, 0.065, 0.06, mat(skinHex)))
-  const armR = limb(0.065, 0.26, shirt, 0.33, 0.82, blob(0.06, 0.065, 0.06, mat(skinHex)))
-  // подтяжки идут по груди и спине, повторяя изгиб «шара»
-  const strap = (x: number, z: number) => {
-    const m = rbox(0.05, 0.3, 0.02, 0.01, accent, x, 0.8, z)
-    m.rotation.x = z > 0 ? -0.55 : 0.55
-    return m
-  }
-  body.add(
-    legL, legR, armL, armR,
-    blob(0.32, 0.33, 0.29, shirt, 0, 0.66, 0), // туловище-шар
-    blob(0.3, 0.1, 0.27, pants, 0, 0.42, 0), // пояс брюк
-    strap(-0.12, 0.24), strap(0.12, 0.24), strap(-0.12, -0.24), strap(0.12, -0.24),
-    rbox(0.07, 0.24, 0.025, 0.012, accent, 0, 0.74, 0.3), // галстук
-    ...head(skinHex, 1.13, 0.2),
-    // остатки волос по бокам
-    blob(0.05, 0.08, 0.12, hair, -0.18, 1.1, -0.03), blob(0.05, 0.08, 0.12, hair, 0.18, 1.1, -0.03),
-    blob(0.13, 0.07, 0.05, hair, 0, 1.07, -0.17),
-    blob(0.09, 0.025, 0.03, hair, 0, 1.05, 0.19), // усы
-  )
-  return { body, legL, legR, armL, armR, tinted: [accent], height: 1.42 }
+function cap(rig: Rig, color: number): void {
+  const b = rig.box('Head')
+  const w = (b.max.x - b.min.x) * 0.5
+  const m = mat(color, rig)
+  const g = new THREE.Group()
+  const domeGeo = geo(new THREE.SphereGeometry(w, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.5), rig)
+  domeGeo.scale(1, 0.62, 1.04)
+  const dome = new THREE.Mesh(domeGeo, m)
+  const brimGeo = geo(new THREE.CylinderGeometry(w * 0.95, w * 0.95, w * 0.06, 24, 1, false, -Math.PI / 2, Math.PI), rig)
+  const brim = new THREE.Mesh(brimGeo, m)
+  brim.position.set(0, w * 0.02, w * 0.38)
+  const button = new THREE.Mesh(geo(new THREE.SphereGeometry(w * 0.08, 8, 6), rig), mat(0xffffff, rig))
+  button.position.y = w * 0.62
+  g.add(dome, brim, button)
+  g.name = 'cap'
+  rig.attach('head', g, new THREE.Vector3(0, b.min.y + (b.max.y - b.min.y) * 0.74, (b.min.z + b.max.z) / 2))
 }
 
-/** Секретарша: длинные волосы, платье-трапеция, каблуки */
-function buildSecretary(color: number, skinHex: number): Rig {
-  const dress = mat(color)
-  const skin = mat(skinHex)
-  const hair = mat(0x8a5a44)
-  const heels = mat(0xd04f78)
-  const body = new THREE.Group()
-  const legL = limb(0.042, 0.3, skin, -0.065, 0.42, shoe(0.075, 0.15, heels))
-  const legR = limb(0.042, 0.3, skin, 0.065, 0.42, shoe(0.075, 0.15, heels))
-  const armL = limb(0.04, 0.3, skin, -0.16, 0.84, blob(0.042, 0.048, 0.042, skin))
-  const armR = limb(0.04, 0.3, skin, 0.16, 0.84, blob(0.042, 0.048, 0.042, skin))
-  body.add(
-    legL, legR, armL, armR,
-    mesh(new THREE.CylinderGeometry(0.12, 0.2, 0.3, 22), dress, 0, 0.5, 0), // юбка
-    rbox(0.24, 0.3, 0.16, 0.08, dress, 0, 0.76, 0), // лиф
-    ...head(skinHex, 1.12, 0.19),
-    dome(0.205, hair, 0, 1.13, -0.01, Math.PI * 0.6, 1.05),
-    rbox(0.34, 0.42, 0.1, 0.05, hair, 0, 0.98, -0.12), // длинные волосы
-    rbox(0.07, 0.3, 0.16, 0.035, hair, -0.17, 1.06, -0.02),
-    rbox(0.07, 0.3, 0.16, 0.035, hair, 0.17, 1.06, -0.02),
-    blob(0.035, 0.016, 0.012, mat(0xe0457b), 0, 1.02, 0.17), // губы
-  )
-  return { body, legL, legR, armL, armR, tinted: [dress], height: 1.42 }
+function pizza(rig: Rig): void {
+  const box = new THREE.Group()
+  const s = 0.42
+  const lid = new THREE.Mesh(geo(new THREE.BoxGeometry(s, s * 0.14, s), rig), mat(0xf2d29b, rig))
+  const logo = new THREE.Mesh(geo(new THREE.CylinderGeometry(s * 0.2, s * 0.2, 0.01, 20), rig), mat(0xe8505b, rig))
+  logo.position.y = s * 0.075
+  box.add(lid, logo)
+  const hand = rig.box('ArmRight')
+  rig.attach('handslot.r', box, new THREE.Vector3(hand.min.x - s * 0.1, hand.min.y + s * 0.15, s * 0.35))
 }
 
-/** Курьер: кепка и поло цвета игрока, джинсы, кеды, коробка пиццы в руке */
-function buildCourier(color: number, skinHex: number): Rig {
-  const polo = mat(color)
-  const jeans = mat(0x7a9cd6)
-  const sneaker = mat(0xffffff)
-  const hair = mat(0x5a4038)
-  const body = new THREE.Group()
-  const legL = limb(0.06, 0.32, jeans, -0.09, 0.46, shoe(0.11, 0.2, sneaker))
-  const legR = limb(0.06, 0.32, jeans, 0.09, 0.46, shoe(0.11, 0.2, sneaker))
-  const armL = limb(0.05, 0.3, polo, -0.2, 0.88, blob(0.05, 0.055, 0.05, mat(skinHex)))
-  const pizza = new THREE.Group()
-  const lid = rbox(0.32, 0.05, 0.32, 0.015, mat(0xf2d29b), 0, 0, 0.1)
-  const logo = mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.006, 20), mat(0xe8505b), 0, 0.028, 0.1)
-  logo.userData.noOutline = true
-  pizza.add(lid, logo)
-  pizza.position.set(0, -0.36, 0.06)
-  const armR = limb(0.05, 0.3, polo, 0.2, 0.88, blob(0.05, 0.055, 0.05, mat(skinHex)))
-  armR.add(pizza)
-  const brim = mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.02, 20, 1, false, -Math.PI / 2, Math.PI), polo, 0, 1.24, 0.08)
-  body.add(
-    legL, legR, armL, armR,
-    rbox(0.3, 0.12, 0.2, 0.06, jeans, 0, 0.5, 0),
-    rbox(0.32, 0.36, 0.21, 0.09, polo, 0, 0.74, 0),
-    rbox(0.12, 0.04, 0.03, 0.015, mat(0xffffff), 0, 0.92, 0.1),
-    ...head(skinHex, 1.14, 0.2),
-    dome(0.205, hair, 0, 1.14, -0.01, Math.PI * 0.5),
-    dome(0.215, polo, 0, 1.18, 0, Math.PI * 0.42, 0.95), // кепка
-    brim,
-  )
-  return { body, legL, legR, armL, armR, tinted: [polo], height: 1.5 }
+function tie(rig: Rig, color: number): void {
+  const b = rig.box('Body')
+  const h = (b.max.y - b.min.y) * 0.5
+  const g = new THREE.Group()
+  const m = mat(color, rig)
+  const knot = new THREE.Mesh(geo(new THREE.BoxGeometry(h * 0.18, h * 0.14, h * 0.08), rig), m)
+  const blade = new THREE.Mesh(geo(new THREE.CylinderGeometry(h * 0.12, h * 0.04, h * 0.75, 4), rig), m)
+  blade.rotation.y = Math.PI / 4
+  blade.scale.z = 0.35
+  blade.position.y = -h * 0.42
+  g.add(knot, blade)
+  g.name = 'tie'
+  rig.attach('chest', g, new THREE.Vector3(0, b.max.y - h * 0.3, b.max.z + 0.01))
 }
 
-const BUILDERS: Record<CharacterId, (color: number, skin: number) => Rig> = {
-  accountant: buildAccountant,
-  boss: buildBoss,
-  secretary: buildSecretary,
-  courier: buildCourier,
+// ---------- аватар ----------
+
+/** Какие клипы играть. Названия — из пака KayKit */
+const CLIP = {
+  idle: 'Idle',
+  run: 'Running_A',
+  walk: 'Walking_A',
+  hit: 'Hit_A',
+  death: 'Death_A',
+  cheer: 'Cheer',
 }
 
-/** Мультяшный офисный персонаж с обводкой. Анимация ходьбы — покачивание рук и ног. */
 export class Avatar {
   readonly root = new THREE.Group()
-  private rig: Rig
+  private model: THREE.Object3D
+  private mixer: THREE.AnimationMixer
+  private actions = new Map<string, THREE.AnimationAction>()
+  private current: THREE.AnimationAction | null = null
   private label: THREE.Sprite
   private ring: THREE.Mesh
-  private phase = 0
+  private disposables: (THREE.BufferGeometry | THREE.Material | THREE.Texture)[] = []
+  private height = HEIGHT
 
-  constructor(name: string, color: number, readonly character: CharacterId, look = 0) {
-    this.rig = BUILDERS[character](color, SKIN[look % SKIN.length])
-    addOutlines(this.rig.body, OUTLINE)
-    this.rig.body.rotation.order = 'YXZ' // сначала поворот, потом наклон вперёд
-    this.rig.body.scale.setScalar(SCALE)
-    this.root.add(this.rig.body)
+  constructor(name: string, private color: number, readonly character: CharacterId, _look = 0) {
+    const look = LOOKS[character]
+    const a = getAssets()
+    this.model = SkeletonUtils.clone(a.chars[look.base].scene)
 
+    // перекраска по группам мешей
+    const cache = new Map<Group, THREE.Material>()
+    this.model.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return
+      o.castShadow = true
+      o.frustumCulled = false // кости двигают вершины за пределы исходных габаритов
+      const grp = groupOf(o.name)
+      let m = cache.get(grp)
+      if (!m) {
+        const src = o.material as THREE.MeshStandardMaterial
+        const nm = src.clone()
+        nm.roughness = 0.8
+        nm.metalness = 0
+        const rules = look.rules[grp]
+        if (rules && src.map) {
+          nm.map = recolor(src.map, rules, color)
+          this.disposables.push(nm.map)
+        }
+        this.disposables.push(nm)
+        cache.set(grp, nm)
+        m = nm
+      }
+      o.material = m
+    })
+
+    // аксессуары — в позе покоя, пока модель без масштаба
+    const model = this.model
+    model.updateMatrixWorld(true)
+    const tq = new THREE.Quaternion(), tv = new THREE.Vector3(), ts = new THREE.Vector3()
+    const rig: Rig = {
+      box: (part) => {
+        let mesh: THREE.SkinnedMesh | null = null
+        model.traverse((o) => { if (!mesh && o instanceof THREE.SkinnedMesh && o.name.endsWith(part)) mesh = o })
+        const m = mesh as THREE.SkinnedMesh | null
+        if (!m) return new THREE.Box3(new THREE.Vector3(-0.3, 1, -0.3), new THREE.Vector3(0.3, 1.6, 0.3))
+        // вершины сжаты (KHR_mesh_quantization), распаковка спрятана в костях —
+        // поэтому габариты считаем по реально скиннутым вершинам
+        m.computeBoundingBox()
+        return m.boundingBox!.clone().applyMatrix4(m.matrixWorld)
+      },
+      attach: (boneName, o, pos) => {
+        // GLTFLoader убирает точки из имён: handslot.r → handslotr
+        const bone = model.getObjectByName(THREE.PropertyBinding.sanitizeNodeName(boneName))
+        if (!bone) return
+        o.traverse((x) => { if (x instanceof THREE.Mesh) x.castShadow = true })
+        bone.matrixWorld.decompose(tv, tq, ts)
+        o.quaternion.copy(tq).invert()
+        o.scale.divide(ts)
+        o.position.copy(bone.worldToLocal(pos.clone()))
+        bone.add(o)
+      },
+      disposables: this.disposables,
+    }
+    look.accessories(rig, color)
+
+    // масштаб под рост и опора на пол
+    const box = new THREE.Box3().setFromObject(this.model)
+    const k = HEIGHT / Math.max(box.max.y - box.min.y, 0.1)
+    this.model.scale.setScalar(k)
+    this.model.position.y = -box.min.y * k
+
+    this.root.add(this.model)
+
+    // анимации
+    this.mixer = new THREE.AnimationMixer(this.model)
+    for (const [key, clipName] of Object.entries(CLIP)) {
+      const clip = a.clips.get(clipName)
+      if (clip) this.actions.set(key, this.mixer.clipAction(clip))
+    }
+    this.play('idle', 0)
+
+    // кольцо цвета игрока
     const r = CHARACTERS[character].radius
     this.ring = new THREE.Mesh(
-      new THREE.RingGeometry(r + 0.04, r + 0.12, 32),
-      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, toneMapped: false }),
+      new THREE.RingGeometry(r + 0.05, r + 0.14, 40),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, toneMapped: false }),
     )
     this.ring.rotation.x = -Math.PI / 2
-    this.ring.position.y = 0.025
+    this.ring.position.y = 0.03
     this.root.add(this.ring)
 
     this.label = makeLabel(name, color)
-    this.label.position.y = this.rig.height * SCALE + 0.35
+    this.label.position.y = this.height + 0.45
     this.root.add(this.label)
   }
 
+  private play(key: string, fade = 0.2): void {
+    const next = this.actions.get(key)
+    if (!next || next === this.current) return
+    next.reset().play()
+    if (this.current) next.crossFadeFrom(this.current, fade, true)
+    this.current = next
+  }
+
+  /** Цвет игрока зависит от порядка входа — при смене пересобираем перекраску */
   setColor(hex: number): void {
-    this.rig.tinted.forEach((m) => m.color.setHex(hex))
+    if (hex === this.color) return
+    this.color = hex
     ;(this.ring.material as THREE.MeshBasicMaterial).color.setHex(hex)
+    const look = LOOKS[this.character]
+    const base = getAssets().chars[look.base].scene
+    const srcMap = new Map<Group, THREE.Texture>()
+    base.traverse((o) => {
+      if (o instanceof THREE.Mesh && (o.material as THREE.MeshStandardMaterial).map) {
+        srcMap.set(groupOf(o.name), (o.material as THREE.MeshStandardMaterial).map!)
+      }
+    })
+    const done = new Set<THREE.Material>()
+    this.model.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return
+      const m = o.material as THREE.MeshStandardMaterial
+      if (done.has(m)) return
+      done.add(m)
+      const grp = groupOf(o.name)
+      const rules = look.rules[grp]
+      const src = srcMap.get(grp)
+      if (rules && src && o instanceof THREE.SkinnedMesh) {
+        m.map?.dispose()
+        m.map = recolor(src, rules, hex)
+        this.disposables.push(m.map)
+        m.needsUpdate = true
+      } else if (!(o instanceof THREE.SkinnedMesh) && /cap|tie/.test(o.parent?.name ?? '')) {
+        m.color.setHex(hex)
+      }
+    })
   }
 
   setName(name: string, color: number): void {
@@ -258,38 +364,29 @@ export class Avatar {
     ;(this.label.material as THREE.SpriteMaterial).map?.dispose()
     this.label.material.dispose()
     this.label = makeLabel(name, color)
-    this.label.position.y = this.rig.height * SCALE + 0.35
+    this.label.position.y = this.height + 0.45
     this.root.add(this.label)
   }
 
   /** speed — текущая скорость (м/с), facing — угол взгляда */
   animate(dt: number, speed: number, facing: number): void {
-    const { body, legL, legR, armL, armR } = this.rig
-    body.rotation.y = facing
-    const moving = Math.min(speed / GAME.player.speed, 1)
-    this.phase += dt * (6 + 8 * moving) * (moving > 0.05 ? 1 : 0)
-    const swing = Math.sin(this.phase) * 0.9 * moving
-    legL.rotation.x = swing
-    legR.rotation.x = -swing
-    armL.rotation.x = -swing
-    armR.rotation.x = this.character === 'courier' ? -1.3 + swing * 0.15 : swing
-    // мультяшная походка: подпрыгивание и покачивание
-    body.position.y = Math.abs(Math.sin(this.phase)) * 0.09 * moving
-    body.rotation.z = Math.sin(this.phase) * 0.06 * moving
-    body.rotation.x = moving * 0.1
+    this.model.rotation.y = facing
+    const k = speed / GAME.player.speed
+    if (k > 0.55) this.play('run')
+    else if (k > 0.12) this.play('walk')
+    else this.play('idle')
+    const run = this.actions.get('run')
+    if (run && this.current === run) run.timeScale = 0.75 + k * 0.45
+    this.mixer.update(dt)
   }
 
   dispose(): void {
-    this.root.traverse((o) => {
-      if (o instanceof THREE.Mesh || o instanceof THREE.Sprite) {
-        if (o.userData.isOutline) return // геометрия общая с основным мешем
-        o.geometry.dispose()
-        const m = o.material as THREE.Material & { map?: THREE.Texture | null }
-        if (m === OUTLINE) return
-        m.map?.dispose()
-        m.dispose()
-      }
-    })
+    this.mixer.stopAllAction()
+    this.disposables.forEach((d) => d.dispose())
+    this.ring.geometry.dispose()
+    ;(this.ring.material as THREE.Material).dispose()
+    ;(this.label.material as THREE.SpriteMaterial).map?.dispose()
+    this.label.material.dispose()
   }
 }
 
