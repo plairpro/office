@@ -127,7 +127,8 @@ html, body {
   font-size: 15px;
   padding: 11px 14px;
 }
-.fps { bottom: 12px; right: 12px; font: 12px ui-monospace, Menlo, monospace; color: var(--muted); padding: 6px 8px; }
+.fps { bottom: 12px; right: 12px; font: 12px ui-monospace, Menlo, monospace; color: var(--muted); padding: 6px 8px; display: flex; gap: 8px; align-items: center; pointer-events: auto; }
+.fps select { font: 12px system-ui, sans-serif; color: var(--text); background: #1c2028; border: 1px solid var(--line); border-radius: 6px; padding: 3px 4px; }
 .hint {
   position: absolute;
   bottom: 14px;
@@ -183,4 +184,31 @@ html, body {
 @media (max-width: 600px) {
   .hint { display: none; }
   .room { min-width: 0; font-size: 13px; }
+}
+
+/* Выбор персонажа */
+.chars { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: -4px; }
+.char {
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  background: #1c2028;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 9px 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.char b { font-size: 14px; }
+.char small { font-size: 11px; color: var(--muted); line-height: 1.35; }
+.char[aria-pressed='true'] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.char .stats { font-size: 11px; color: var(--text); opacity: 0.9; }
+.char .stats .up { color: #6fdc8c; }
+.char .stats .down { color: #ff7a7a; }
+
+/* На широком экране меню слева — справа видно выбранного персонажа */
+@media (min-width: 900px) {
+  #menu { justify-items: start; padding-left: 7vw; background: linear-gradient(90deg, rgba(29,33,41,0.92) 0%, rgba(29,33,41,0.55) 45%, rgba(29,33,41,0) 70%); }
 }

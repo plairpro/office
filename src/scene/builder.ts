@@ -1,5 +1,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
+import * as TX from './textures'
 
 /** Прямоугольник препятствия на полу (вид сверху), центр + полуразмеры */
 export interface AABB {
@@ -9,54 +11,110 @@ export interface AABB {
   hd: number
 }
 
-type Layer = 'solid' | 'glow' | 'glass'
+/** Тип поверхности: от него зависят текстура, шероховатость, металличность */
+export type Kind =
+  | 'paint' | 'tile' | 'carpet' | 'wood' | 'darkwood' | 'marble' | 'metal' | 'chrome'
+  | 'plastic' | 'matte' | 'fabric' | 'leather' | 'glass' | 'screen' | 'light' | 'foliage'
+
+interface KindDef {
+  scale?: number // метров на повтор текстуры (мировые UV)
+  ownUV?: boolean // использовать UV самой геометрии (экраны)
+  castShadow?: boolean
+  make(): THREE.Material
+}
+
+let textures: ReturnType<typeof loadTextures> | null = null
+function loadTextures() {
+  return {
+    tile: TX.tileTexture(),
+    carpet: TX.carpetTexture(),
+    wood: TX.woodTexture(),
+    darkwood: TX.woodTexture([196, 160, 128]),
+    marble: TX.marbleTexture(),
+    plaster: TX.plasterTexture(),
+    fabric: TX.fabricTexture(),
+    screen: TX.screenTexture(),
+  }
+}
+
+const std = (p: THREE.MeshStandardMaterialParameters) =>
+  new THREE.MeshStandardMaterial({ vertexColors: true, ...p })
+
+const KINDS: Record<Kind, KindDef> = {
+  paint: { scale: 2, castShadow: true, make: () => std({ map: textures!.plaster, roughness: 0.92 }) },
+  tile: { scale: 1.2, make: () => std({ map: textures!.tile, roughness: 0.32, metalness: 0 }) },
+  carpet: { scale: 2, make: () => std({ map: textures!.carpet, roughness: 1 }) },
+  wood: { scale: 1, castShadow: true, make: () => std({ map: textures!.wood, roughness: 0.55 }) },
+  darkwood: { scale: 1, castShadow: true, make: () => std({ map: textures!.darkwood, roughness: 0.5 }) },
+  marble: { scale: 1.4, castShadow: true, make: () => std({ map: textures!.marble, roughness: 0.18 }) },
+  metal: { castShadow: true, make: () => std({ roughness: 0.38, metalness: 0.85 }) },
+  chrome: { castShadow: true, make: () => std({ roughness: 0.12, metalness: 1 }) },
+  plastic: { castShadow: true, make: () => std({ roughness: 0.42 }) },
+  matte: { castShadow: true, make: () => std({ roughness: 0.85 }) },
+  fabric: { scale: 0.25, castShadow: true, make: () => std({ map: textures!.fabric, roughness: 1 }) },
+  leather: { castShadow: true, make: () => std({ roughness: 0.45 }) },
+  foliage: { castShadow: true, make: () => std({ roughness: 0.6, side: THREE.DoubleSide }) },
+  glass: {
+    make: () => new THREE.MeshPhysicalMaterial({
+      vertexColors: true, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.22,
+      depthWrite: false, envMapIntensity: 1.6, side: THREE.DoubleSide,
+    }),
+  },
+  screen: {
+    ownUV: true,
+    make: () => new THREE.MeshStandardMaterial({
+      vertexColors: true, map: textures!.screen, emissive: 0xffffff, emissiveMap: textures!.screen,
+      emissiveIntensity: 1.6, roughness: 0.25,
+    }),
+  },
+  // цвет ×1.8 — ярче единицы, только эти поверхности светятся в bloom
+  light: { make: () => new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, color: new THREE.Color(1.8, 1.8, 1.8) }) },
+}
+
+const ORDER = Object.keys(KINDS) as Kind[]
+
+interface Opts { collide?: boolean; rotY?: number; rotX?: number; rotZ?: number }
 
 /**
- * Собирает статичную геометрию в 3 меша (обычный, светящийся, стекло) с цветами в вершинах.
- * Весь офис рисуется за 3 вызова отрисовки — быстро даже на встроенной графике.
+ * Собирает статичную геометрию: по одному мешу на тип поверхности (≈15 вызовов отрисовки на весь офис).
+ * UV считаются от мировых координат — текстуры плитки, дерева и т.п. ложатся ровно и без растяжений.
  */
 export class StaticBuilder {
-  private parts: Record<Layer, THREE.BufferGeometry[]> = { solid: [], glow: [], glass: [] }
+  private parts = new Map<Kind, THREE.BufferGeometry[]>()
   readonly colliders: AABB[] = []
   private color = new THREE.Color()
 
-  box(
-    w: number, h: number, d: number,
-    x: number, y: number, z: number,
-    hex: number,
-    opts: { collide?: boolean; layer?: Layer; rotY?: number } = {},
-  ): void {
-    const g = new THREE.BoxGeometry(w, h, d)
-    if (opts.rotY) g.rotateY(opts.rotY)
-    g.translate(x, y + h / 2, z)
-    this.push(g, hex, opts.layer ?? 'solid')
-    if (opts.collide) {
-      // для повёрнутых объектов берём описывающий прямоугольник
-      const r = opts.rotY ?? 0
-      const c = Math.abs(Math.cos(r)), s = Math.abs(Math.sin(r))
-      this.colliders.push({ x, z, hw: (w * c + d * s) / 2, hd: (w * s + d * c) / 2 })
-    }
+  constructor() { textures ??= loadTextures() }
+
+  box(w: number, h: number, d: number, x: number, y: number, z: number, kind: Kind, hex = 0xffffff, o: Opts = {}): void {
+    this.add(new THREE.BoxGeometry(w, h, d), x, y + h / 2, z, kind, hex, o)
+    if (o.collide) this.collideBox(w, d, x, z, o.rotY ?? 0)
   }
 
-  cylinder(
-    rTop: number, rBottom: number, h: number,
-    x: number, y: number, z: number,
-    hex: number,
-    opts: { collide?: boolean; layer?: Layer; segments?: number } = {},
-  ): void {
-    const g = new THREE.CylinderGeometry(rTop, rBottom, h, opts.segments ?? 10)
-    g.translate(x, y + h / 2, z)
-    this.push(g, hex, opts.layer ?? 'solid')
-    if (opts.collide) {
+  /** Коробка со скруглёнными рёбрами — диваны, подушки, техника */
+  rbox(w: number, h: number, d: number, r: number, x: number, y: number, z: number, kind: Kind, hex = 0xffffff, o: Opts = {}): void {
+    this.add(new RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2, h / 2, d / 2)), x, y + h / 2, z, kind, hex, o)
+    if (o.collide) this.collideBox(w, d, x, z, o.rotY ?? 0)
+  }
+
+  cylinder(rTop: number, rBottom: number, h: number, x: number, y: number, z: number, kind: Kind, hex = 0xffffff,
+    o: Opts & { segments?: number } = {}): void {
+    this.add(new THREE.CylinderGeometry(rTop, rBottom, h, o.segments ?? 20), x, y + h / 2, z, kind, hex, o)
+    if (o.collide) {
       const r = Math.max(rTop, rBottom)
       this.colliders.push({ x, z, hw: r, hd: r })
     }
   }
 
-  sphere(r: number, x: number, y: number, z: number, hex: number, detail = 0): void {
-    const g = new THREE.IcosahedronGeometry(r, detail)
-    g.translate(x, y, z)
-    this.push(g, hex, 'solid')
+  sphere(r: number, x: number, y: number, z: number, kind: Kind, hex = 0xffffff, sx = 1, sy = 1, sz = 1, o: Opts = {}): void {
+    const g = new THREE.SphereGeometry(r, 16, 12)
+    g.scale(sx, sy, sz)
+    this.add(g, x, y, z, kind, hex, o)
+  }
+
+  /** Произвольная геометрия */
+  geo(g: THREE.BufferGeometry, x: number, y: number, z: number, kind: Kind, hex = 0xffffff, o: Opts = {}): void {
+    this.add(g, x, y, z, kind, hex, o)
   }
 
   /** Только препятствие, без геометрии */
@@ -64,58 +122,68 @@ export class StaticBuilder {
     this.colliders.push({ x, z, hw: w / 2, hd: d / 2 })
   }
 
-  private push(g: THREE.BufferGeometry, hex: number, layer: Layer): void {
-    // плоская заливка: убираем индексы, чтобы грани не сглаживались
-    const geo = g.index ? g.toNonIndexed() : g
-    geo.deleteAttribute('uv')
-    geo.computeVertexNormals()
+  private collideBox(w: number, d: number, x: number, z: number, r: number): void {
+    const c = Math.abs(Math.cos(r)), s = Math.abs(Math.sin(r))
+    this.colliders.push({ x, z, hw: (w * c + d * s) / 2, hd: (w * s + d * c) / 2 })
+  }
+
+  private add(g0: THREE.BufferGeometry, x: number, y: number, z: number, kind: Kind, hex: number, o: Opts): void {
+    if (o.rotX) g0.rotateX(o.rotX)
+    if (o.rotZ) g0.rotateZ(o.rotZ)
+    if (o.rotY) g0.rotateY(o.rotY)
+    g0.translate(x, y, z)
+    const g = g0.index ? g0.toNonIndexed() : g0
+    if (g !== g0) g0.dispose()
+    const def = KINDS[kind]
+
+    const pos = g.getAttribute('position')
+    const nrm = g.getAttribute('normal')
+    const n = pos.count
+    if (!def.ownUV) {
+      // мировые UV: проекция по доминирующей оси нормали
+      const s = 1 / (def.scale ?? 1)
+      const uv = new Float32Array(n * 2)
+      for (let i = 0; i < n; i++) {
+        const ax = Math.abs(nrm.getX(i)), ay = Math.abs(nrm.getY(i)), az = Math.abs(nrm.getZ(i))
+        const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i)
+        if (ay >= ax && ay >= az) { uv[i * 2] = px * s; uv[i * 2 + 1] = pz * s }
+        else if (ax >= az) { uv[i * 2] = pz * s; uv[i * 2 + 1] = py * s }
+        else { uv[i * 2] = px * s; uv[i * 2 + 1] = py * s }
+      }
+      g.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
+    }
+
     this.color.setHex(hex)
-    const n = geo.getAttribute('position').count
     const colors = new Float32Array(n * 3)
     for (let i = 0; i < n; i++) {
       colors[i * 3] = this.color.r
       colors[i * 3 + 1] = this.color.g
       colors[i * 3 + 2] = this.color.b
     }
-    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-    this.parts[layer].push(geo)
+    g.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+    // одинаковый набор атрибутов у всех — иначе склейка не сработает
+    for (const name of Object.keys(g.attributes)) {
+      if (!['position', 'normal', 'uv', 'color'].includes(name)) g.deleteAttribute(name)
+    }
+    if (!this.parts.has(kind)) this.parts.set(kind, [])
+    this.parts.get(kind)!.push(g)
   }
 
   build(): THREE.Group {
     const group = new THREE.Group()
-    const solid = this.merge('solid')
-    if (solid) {
-      const mesh = new THREE.Mesh(
-        solid,
-        new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }),
-      )
-      mesh.castShadow = true
-      mesh.receiveShadow = true
-      group.add(mesh)
-    }
-    const glow = this.merge('glow')
-    if (glow) {
-      group.add(new THREE.Mesh(glow, new THREE.MeshBasicMaterial({ vertexColors: true })))
-    }
-    const glass = this.merge('glass')
-    if (glass) {
-      const mesh = new THREE.Mesh(
-        glass,
-        new THREE.MeshLambertMaterial({
-          vertexColors: true, transparent: true, opacity: 0.28, depthWrite: false,
-        }),
-      )
-      mesh.renderOrder = 2
+    for (const kind of ORDER) {
+      const list = this.parts.get(kind)
+      if (!list?.length) continue
+      const merged = mergeGeometries(list, false)
+      list.forEach((g) => g.dispose())
+      if (!merged) continue
+      const mesh = new THREE.Mesh(merged, KINDS[kind].make())
+      mesh.name = kind
+      mesh.receiveShadow = kind !== 'light' && kind !== 'glass'
+      mesh.castShadow = !!KINDS[kind].castShadow
+      if (kind === 'glass') mesh.renderOrder = 2
       group.add(mesh)
     }
     return group
-  }
-
-  private merge(layer: Layer): THREE.BufferGeometry | null {
-    const list = this.parts[layer]
-    if (!list.length) return null
-    const merged = mergeGeometries(list, false)
-    list.forEach((g) => g.dispose())
-    return merged
   }
 }

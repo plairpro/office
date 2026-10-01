@@ -24,6 +24,8 @@
           <span>Как тебя зовут в офисе?</span>
           <input id="name" maxlength="16" autocomplete="nickname" placeholder="Например, Бухгалтер Света" />
         </label>
+        <div class="field"><span>Кем будешь драться?</span></div>
+        <div id="chars" class="chars"></div>
         <button id="btn-main" class="btn primary">Создать матч</button>
         <button id="btn-solo" class="btn ghost">Побегать одному</button>
         <p id="menu-error" class="error" hidden></p>
@@ -38,7 +40,13 @@
         <div id="net-status" class="status"></div>
       </div>
       <button id="btn-invite" class="btn primary invite">📨 Позвать коллег</button>
-      <div class="panel fps" id="fps"></div>
+      <div class="panel fps"><span id="fps"></span>
+        <select id="quality" title="Графика">
+          <option value="low">Низкая</option>
+          <option value="medium">Средняя</option>
+          <option value="high">Высокая</option>
+        </select>
+      </div>
       <div class="hint">WASD — бег · мышь — взгляд</div>
     </div>
 

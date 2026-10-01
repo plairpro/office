@@ -22,3 +22,11 @@ export function loadName(): string {
 export function saveName(name: string): void {
   try { localStorage.setItem(NAME_KEY, name) } catch { /* приватный режим — не страшно */ }
 }
+
+export function loadPref(key: string): string | null {
+  try { return localStorage.getItem(`office-rage:${key}`) } catch { return null }
+}
+
+export function savePref(key: string, value: string): void {
+  try { localStorage.setItem(`office-rage:${key}`, value) } catch { /* не страшно */ }
+}

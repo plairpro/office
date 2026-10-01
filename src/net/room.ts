@@ -1,5 +1,5 @@
 import { joinRoom, selfId, type Room } from 'trystero'
-import { GAME } from '../config/game'
+import { GAME, CHARACTERS, type CharacterId } from '../config/game'
 
 /** Сжатое состояние игрока: x, z, угол взгляда, скорость */
 export type StatePacket = [number, number, number, number, number]
@@ -7,12 +7,14 @@ export type StatePacket = [number, number, number, number, number]
 export type Hello = {
   name: string
   joinedAt: number
+  character: CharacterId
 }
 
 export interface PeerInfo {
   id: string
   name: string
   joinedAt: number
+  character: CharacterId
 }
 
 export interface NetEvents {
@@ -34,7 +36,12 @@ export class NetRoom {
   private sendState: (s: StatePacket) => void
   private left = false
 
-  constructor(readonly code: string, private myName: string, ev: NetEvents) {
+  constructor(
+    readonly code: string,
+    private myName: string,
+    private myCharacter: CharacterId,
+    ev: NetEvents,
+  ) {
     this.room = joinRoom({ appId: GAME.net.appId }, `room-${code}`)
 
     const hello = this.room.makeAction<Hello>('hello')
@@ -42,7 +49,7 @@ export class NetRoom {
     this.sendState = (s) => { if (!this.left) void state.send(s) }
 
     this.room.onPeerJoin = (id) => {
-      void hello.send({ name: this.myName, joinedAt: this.joinedAt }, { target: id })
+      void hello.send({ name: this.myName, joinedAt: this.joinedAt, character: this.myCharacter }, { target: id })
     }
     this.room.onPeerLeave = (id) => {
       this.peers.delete(id)
@@ -53,6 +60,7 @@ export class NetRoom {
         id: peerId,
         name: String(data.name).slice(0, 16) || 'Коллега',
         joinedAt: Number(data.joinedAt) || Date.now(),
+        character: data.character in CHARACTERS ? data.character : 'courier',
       }
       this.peers.set(peerId, info)
       ev.onPeerHello(info)
@@ -69,7 +77,10 @@ export class NetRoom {
 
   /** Все участники по порядку входа: от этого зависят цвет и точка появления */
   ordered(): PeerInfo[] {
-    return [{ id: this.selfId, name: this.myName, joinedAt: this.joinedAt }, ...this.peers.values()]
+    return [
+      { id: this.selfId, name: this.myName, joinedAt: this.joinedAt, character: this.myCharacter },
+      ...this.peers.values(),
+    ]
       .sort((a, b) => a.joinedAt - b.joinedAt || (a.id < b.id ? -1 : 1))
   }
 

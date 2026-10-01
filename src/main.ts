@@ -1,66 +1,53 @@
 import * as THREE from 'three'
-import { GAME, PLAYER_COLORS } from './config/game'
+import { GAME, PLAYER_COLORS, CHARACTERS, CHARACTER_ORDER, type CharacterId } from './config/game'
 import { buildOffice } from './scene/office'
+import { Renderer, autoQuality, type Quality } from './scene/render'
 import { Avatar, stepBody, type Body } from './game/avatar'
 import { Input } from './game/input'
 import { NetRoom, makeRoomCode, readRoomCode, type StatePacket } from './net/room'
-import { $, showToast, loadName, saveName } from './ui/dom'
+import { $, showToast, loadName, saveName, loadPref, savePref } from './ui/dom'
 
 // ---------- рендер ----------
 
 const host = $('game')
-const renderer = new THREE.WebGLRenderer({
-  antialias: window.devicePixelRatio < 2,
-  powerPreference: 'high-performance',
-})
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75))
-renderer.shadowMap.enabled = true
-renderer.shadowMap.type = THREE.PCFShadowMap
-renderer.toneMapping = THREE.ACESFilmicToneMapping
-renderer.toneMappingExposure = 1.05
-host.appendChild(renderer.domElement)
-
-const scene = new THREE.Scene()
-scene.background = new THREE.Color(0x1d2129)
-scene.fog = new THREE.Fog(0x1d2129, 40, 75)
-
-scene.add(new THREE.HemisphereLight(0xfff4e0, 0x5a6478, 1.5))
-const sun = new THREE.DirectionalLight(0xfff1dc, 1.7)
-sun.position.set(-10, 26, 9)
-sun.castShadow = true
-sun.shadow.mapSize.set(2048, 2048)
-sun.shadow.camera.left = -24
-sun.shadow.camera.right = 24
-sun.shadow.camera.top = 20
-sun.shadow.camera.bottom = -20
-sun.shadow.camera.far = 70
-sun.shadow.bias = -0.0005
-sun.shadow.normalBias = 0.03
-scene.add(sun, sun.target)
-
 const office = buildOffice()
+const camera = new THREE.PerspectiveCamera(GAME.camera.fov, 1, 0.5, 120)
+const gfx = new Renderer(host, camera, office.sunDir)
+const scene = gfx.scene
+const renderer = gfx.renderer
 scene.add(office.group)
 
-const camera = new THREE.PerspectiveCamera(GAME.camera.fov, 1, 1, 120)
 const camOffset = new THREE.Vector3(GAME.camera.offset.x, GAME.camera.offset.y, GAME.camera.offset.z)
 const camTarget = new THREE.Vector3()
+let camZoom = 0.42
 
 function resize(): void {
   const w = window.innerWidth, h = window.innerHeight
-  renderer.setSize(w, h)
   camera.aspect = w / h
   // на узком экране (телефон вертикально) отъезжаем, чтобы видеть больше
   camera.fov = GAME.camera.fov * (w / h < 1 ? 1.45 : 1)
   camera.updateProjectionMatrix()
+  gfx.resize()
 }
 window.addEventListener('resize', resize)
+
+const savedQ = new URLSearchParams(location.search).get('q') ?? loadPref('quality')
+gfx.setQuality(savedQ === 'low' || savedQ === 'medium' || savedQ === 'high' ? savedQ : autoQuality())
 resize()
+
+const qSelect = $('quality') as HTMLSelectElement
+qSelect.value = gfx.getQuality()
+qSelect.addEventListener('change', () => {
+  gfx.setQuality(qSelect.value as Quality)
+  savePref('quality', qSelect.value)
+  qSelect.blur()
+})
 
 // ---------- игроки ----------
 
 const input = new Input(renderer.domElement)
 
-interface Local { avatar: Avatar; body: Body; facing: number }
+interface Local { avatar: Avatar; body: Body; facing: number; character: CharacterId }
 interface Remote { avatar: Avatar; body: Body; target: Body; facing: number; lastAt: number }
 
 let me: Local | null = null
@@ -69,10 +56,10 @@ let net: NetRoom | null = null
 
 function spawnLocal(name: string, slot: number): void {
   const sp = office.spawns[slot % office.spawns.length]
-  const avatar = new Avatar(name, PLAYER_COLORS[slot], slot)
+  const avatar = new Avatar(name, PLAYER_COLORS[slot], myChar, slot)
   avatar.root.position.set(sp.x, 0, sp.z)
   scene.add(avatar.root)
-  me = { avatar, body: { x: sp.x, z: sp.z, vx: 0, vz: 0 }, facing: sp.rot }
+  me = { avatar, body: { x: sp.x, z: sp.z, vx: 0, vz: 0 }, facing: sp.rot, character: myChar }
   camTarget.set(sp.x, 0, sp.z)
 }
 
@@ -88,7 +75,7 @@ function rosterChanged(): void {
       let r = remotes.get(p.id)
       if (!r) {
         const sp = office.spawns[rank % office.spawns.length]
-        const avatar = new Avatar(p.name, color, rank)
+        const avatar = new Avatar(p.name, color, p.character, rank)
         avatar.root.position.set(sp.x, 0, sp.z)
         scene.add(avatar.root)
         const b = { x: sp.x, z: sp.z, vx: 0, vz: 0 }
@@ -114,12 +101,12 @@ function removeRemote(id: string): void {
 function renderRoster(): void {
   const ul = $('roster')
   ul.textContent = ''
-  const list = net ? net.ordered() : [{ id: 'me', name: myName, joinedAt: 0 }]
+  const list = net ? net.ordered() : [{ id: 'me', name: myName, joinedAt: 0, character: myChar }]
   list.forEach((p, i) => {
     const li = document.createElement('li')
     const dot = document.createElement('i')
     dot.style.background = '#' + PLAYER_COLORS[i % 4].toString(16).padStart(6, '0')
-    li.append(dot, document.createTextNode(p.name))
+    li.append(dot, document.createTextNode(`${p.name} · ${CHARACTERS[p.character].name}`))
     if (!net || p.id === net.selfId) li.className = 'me'
     ul.appendChild(li)
   })
@@ -130,6 +117,57 @@ function renderRoster(): void {
 }
 
 // ---------- меню ----------
+
+const PREVIEW = { x: 0, z: 2.6 }
+let preview: Avatar | null = null
+let myChar: CharacterId = (CHARACTER_ORDER as string[]).includes(loadPref('character') ?? '')
+  ? (loadPref('character') as CharacterId)
+  : 'courier'
+
+function setPreview(id: CharacterId | null): void {
+  if (preview) { scene.remove(preview.root); preview.dispose(); preview = null }
+  if (!id) return
+  preview = new Avatar(CHARACTERS[id].name, PLAYER_COLORS[0], id)
+  preview.root.position.set(PREVIEW.x, 0, PREVIEW.z)
+  preview.root.rotation.y = 0.8
+  scene.add(preview.root)
+}
+
+function pct(mul: number): string {
+  const v = Math.round((mul - 1) * 100)
+  return v === 0 ? '' : v > 0 ? `+${v}%` : `${v}%`
+}
+
+function renderCharacters(): void {
+  const wrap = $('chars')
+  wrap.textContent = ''
+  for (const id of CHARACTER_ORDER) {
+    const c = CHARACTERS[id]
+    const btn = document.createElement('button')
+    btn.className = 'char'
+    btn.type = 'button'
+    btn.setAttribute('aria-pressed', String(id === myChar))
+    const stat = (label: string, v: string, good: boolean) =>
+      v ? `<span class="${good ? 'up' : 'down'}">${label} ${v}</span>` : ''
+    const parts = [
+      `<span class="${c.hp >= 100 ? 'up' : 'down'}">❤ ${c.hp}</span>`,
+      stat('бег', pct(c.moveMul), c.moveMul > 1),
+      stat('атака', pct(c.attackSpeedMul), c.attackSpeedMul > 1),
+      c.dodge ? `<span class="up">уклон ${Math.round(c.dodge * 100)}%</span>` : '',
+    ].filter(Boolean)
+    btn.innerHTML = `<b>${c.name}</b><span class="stats">${parts.join(' · ')}</span><small>${c.blurb}</small>`
+    btn.addEventListener('click', () => {
+      myChar = id
+      savePref('character', id)
+      renderCharacters()
+      setPreview(id)
+    })
+    wrap.appendChild(btn)
+  }
+}
+renderCharacters()
+setPreview(myChar)
+
 
 let myName = loadName()
 const nameInput = $('name') as HTMLInputElement
@@ -143,6 +181,7 @@ if (invitedCode) {
 function startGame(code: string | null): void {
   myName = nameInput.value.trim().slice(0, 16) || 'Стажёр'
   saveName(myName)
+  setPreview(null)
   $('menu').hidden = true
   $('hud').hidden = false
 
@@ -157,7 +196,7 @@ function startGame(code: string | null): void {
   history.replaceState(null, '', `#${code}`)
   $('room-code').textContent = code
   $('btn-invite').hidden = false
-  net = new NetRoom(code, myName, {
+  net = new NetRoom(code, myName, myChar, {
     onPeerHello: () => rosterChanged(),
     onPeerLeave: (id) => { removeRemote(id); rosterChanged() },
     onPeerState: (id, s) => {
@@ -195,6 +234,7 @@ function backToMenu(error?: string): void {
   $('menu').hidden = false
   $('btn-main').textContent = 'Создать матч'
   $('menu-tagline').textContent = 'Быстрый PvP на 2–4 коллег. Без регистрации.'
+  setPreview(myChar)
   const err = $('menu-error')
   err.hidden = !error
   err.textContent = error ?? ''
@@ -238,7 +278,8 @@ function frame(time: number): void {
 
   if (me) {
     const dir = input.moveDir()
-    stepBody(me.body, dir.x, dir.z, dt, office.colliders)
+    const ch = CHARACTERS[me.character]
+    stepBody(me.body, dir.x, dir.z, dt, office.colliders, ch.moveMul, ch.radius)
     const speed = Math.hypot(me.body.vx, me.body.vz)
 
     // взгляд: на мышь, а на телефоне — по направлению движения
@@ -271,9 +312,12 @@ function frame(time: number): void {
       net.broadcastState(s)
     }
   } else {
-    // в меню камера медленно облетает офис
-    const t = performance.now() / 9000
-    camTarget.set(Math.sin(t) * 5, 0, Math.cos(t * 0.7) * 3)
+    // в меню камера смотрит на выбранного персонажа
+    camTarget.set(PREVIEW.x - 2.2, 0, PREVIEW.z + 2.2)
+    if (preview) {
+      preview.root.rotation.y += dt * 0.6
+      preview.animate(dt, 0, 0)
+    }
   }
 
   // чужие игроки: экстраполяция по скорости + сглаживание
@@ -291,9 +335,11 @@ function frame(time: number): void {
     r.avatar.root.userData.f = r.facing
   }
 
-  camera.position.copy(camTarget).add(camOffset)
+  // в меню камера ближе — крупный план персонажа
+  camZoom += ((me ? 1 : 0.42) - camZoom) * (1 - Math.exp(-4 * dt))
+  camera.position.copy(camTarget).addScaledVector(camOffset, camZoom)
   camera.lookAt(camTarget)
-  renderer.render(scene, camera)
+  gfx.render()
 
   fpsAcc += dt; fpsFrames++
   if (fpsAcc > 0.5) {

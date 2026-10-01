@@ -24,6 +24,43 @@ export const GAME = {
 /** Цвета рубашек игроков по слотам */
 export const PLAYER_COLORS = [0xe8505b, 0x3d8bfd, 0xf5b700, 0x2bb673] as const
 
+// --- Персонажи ---
+
+export type CharacterId = 'accountant' | 'boss' | 'secretary' | 'courier'
+
+export interface CharacterDef {
+  id: CharacterId
+  name: string
+  blurb: string
+  hp: number
+  moveMul: number // множитель скорости бега
+  attackSpeedMul: number // множитель скорости атаки (больше — быстрее)
+  dodge: number // шанс уклониться от удара, 0..1
+  radius: number // размер хитбокса
+  knockbackResist: number // 0 — отлетает полностью, 1 — не отлетает
+}
+
+export const CHARACTERS: Record<CharacterId, CharacterDef> = {
+  accountant: {
+    id: 'accountant', name: 'Бухгалтерша', blurb: 'Хрупкая, но вёрткая. Видела всё.',
+    hp: 80, moveMul: 1.03, attackSpeedMul: 1.15, dodge: 0.15, radius: 0.38, knockbackResist: 0,
+  },
+  boss: {
+    id: 'boss', name: 'Босс', blurb: 'Медленный, но его не сдвинуть.',
+    hp: 150, moveMul: 0.92, attackSpeedMul: 0.95, dodge: 0, radius: 0.52, knockbackResist: 0.7,
+  },
+  secretary: {
+    id: 'secretary', name: 'Секретарша', blurb: 'Печатает 300 знаков в минуту. И бьёт так же.',
+    hp: 90, moveMul: 1.04, attackSpeedMul: 1.25, dodge: 0, radius: 0.38, knockbackResist: 0,
+  },
+  courier: {
+    id: 'courier', name: 'Курьер', blurb: 'Доставка за 30 секунд или пицца бесплатно.',
+    hp: 95, moveMul: 1.12, attackSpeedMul: 1.05, dodge: 0, radius: 0.42, knockbackResist: 0,
+  },
+}
+
+export const CHARACTER_ORDER: CharacterId[] = ['accountant', 'boss', 'secretary', 'courier']
+
 // --- Оружие (используется со следующего этапа) ---
 
 export type Effect =
