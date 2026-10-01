@@ -22,7 +22,8 @@ export const GAME = {
 } as const
 
 /** Цвета рубашек игроков по слотам */
-export const PLAYER_COLORS = [0xe8505b, 0x3d8bfd, 0xf5b700, 0x2bb673] as const
+// цвета игроков — из палитры Monument Valley, но достаточно разные, чтобы различать в бою
+export const PLAYER_COLORS = [0xe9806e, 0x4fb3a9, 0xf0b84a, 0x9483d1] as const
 
 // --- Персонажи ---
 

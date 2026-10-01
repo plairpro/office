@@ -43,19 +43,20 @@ export class Renderer {
     this.renderer = r
 
     const scene = this.scene
-    scene.background = new THREE.Color(0xd9dcef)
-    scene.fog = new THREE.Fog(0xd9dcef, 45, 80)
+    // небо-градиент в духе Monument Valley: персик → розовый → лаванда
+    scene.background = skyGradient()
+    scene.fog = new THREE.Fog(0xf3d6d6, 38, 75)
 
     // мягкий свет «комнаты» — даёт объём и отражения на PBR-материалах
     const pmrem = new THREE.PMREMGenerator(r)
     scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
-    scene.environmentIntensity = 0.55
+    scene.environmentIntensity = 0.35
     pmrem.dispose()
 
-    scene.add(new THREE.HemisphereLight(0xfdfaff, 0xf0dbe6, 1.5))
+    scene.add(new THREE.HemisphereLight(0xffe9e4, 0x9fcfd0, 1.65))
 
     // солнце: светит снаружи через окна северной стены
-    const sun = new THREE.DirectionalLight(0xfff0dd, 3.2)
+    const sun = new THREE.DirectionalLight(0xfff0e2, 3.0)
     sun.position.copy(sunDir).multiplyScalar(45)
     sun.castShadow = true
     const sc = sun.shadow.camera
@@ -64,6 +65,7 @@ export class Renderer {
     sun.shadow.bias = -0.0004
     sun.shadow.normalBias = 0.02
     sun.shadow.radius = 1.2
+    sun.shadow.intensity = 0.62 // тени мягкие и цветные: в них проступает бирюзовый свет снизу
     scene.add(sun, sun.target)
     this.sun = sun
 
@@ -123,4 +125,20 @@ export class Renderer {
     if (this.composer) this.composer.render()
     else this.renderer.render(this.scene, this.camera)
   }
+}
+
+function skyGradient(): THREE.Texture {
+  const c = document.createElement('canvas')
+  c.width = 4
+  c.height = 256
+  const g = c.getContext('2d')!
+  const grad = g.createLinearGradient(0, 0, 0, 256)
+  grad.addColorStop(0, '#c9b8e6')
+  grad.addColorStop(0.45, '#f2c4cf')
+  grad.addColorStop(1, '#f9dcc4')
+  g.fillStyle = grad
+  g.fillRect(0, 0, 4, 256)
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.SRGBColorSpace
+  return t
 }

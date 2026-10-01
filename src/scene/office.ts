@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { StaticBuilder, type AABB } from './builder'
 import { prop, type PackName } from '../assets'
+import { MV } from './palette'
 
 export interface Spawn { x: number; z: number; rot: number }
 
@@ -19,13 +20,18 @@ const PIECE = 4 * S // ширина модульной стены
 const W = (14 * PIECE) / 2 // 20.16 м
 const D = (10 * PIECE) / 2 // 14.4 м
 
+// Цвета геометрии — только из палитры Monument Valley
 const C = {
-  floor: 0xf6f1ec, lowWall: 0xa8dccb, lowTop: 0xf3e3d3,
-  carpetA: 0xd6dcf5, carpetB: 0xf5d6dc, carpetC: 0xd9efe2, carpetMeet: 0xe7dcf3,
-  ink: 0x4a4e6e, glass: 0xe6f4ff, frame: 0x6a6f8e, white: 0xfbf8f4,
-  rack: 0x9aa0c8, rackFront: 0x777da3, ledG: 0x7dffb0, ledR: 0xff8fa3, ledB: 0x8fc4ff,
-  cooler: 0x9ad8ff, zone: 0xa8e6d6, zoneIn: 0xc6f0e4,
-  steel: 0xd3d7e6, sign: 0xffd27a,
+  floor: MV.cream, floorAlt: MV.creamLight,
+  lowWall: MV.teal, lowTop: MV.cream,
+  carpetA: MV.lilac, carpetB: MV.blush, carpetC: MV.mint, carpetMeet: MV.sky, carpetBoss: MV.coral,
+  ink: MV.indigo, glass: 0xeaf4ff, frame: MV.indigo, white: MV.white,
+  rack: MV.lavender, rackFront: MV.indigo, ledG: 0x9dffc9, ledR: 0xffb3c0, ledB: 0xb3d9ff,
+  cooler: 0xbfe6ff, zone: MV.mint, zoneIn: 0xc9efe3,
+  steel: MV.lilac, sign: MV.mustard,
+  water: 0x8fd6cf, waterLight: 0xc9f0ea, rim: MV.creamLight,
+  pillar: MV.creamLight, arch: MV.coral, archAlt: MV.peach, step: MV.blush, stepSide: MV.coral,
+  pot: MV.creamLight, leaf: MV.teal, leafLight: MV.mint,
 }
 
 let seed = 1337
@@ -65,38 +71,51 @@ class Placer {
   }
 }
 
+/*
+  План этажа (вид сверху, север — вверх):
+
+   ┌ переговорка ┐  open-space «Север»  [лифт N]  open-space    ┌ кабинет Босса ┐
+   │   (стекло)  │                                               │   (стекло)    │
+   └─────────────┘ ═══ колоннада с арками ═══════════════════    └───────────────┘
+  [лифт W]           ~~~~ бассейн ~~~~          серверная      [лифт E]
+   open-space        ~ мост · КУЛЕР · мост ~
+   «Запад»           ~~~~~~~~~~~~~~~~~~~~
+   невозможная      ресепшен [лифт S]   лаунж          кухня
+   лестница
+*/
 export function buildOffice(): Office {
   seed = 1337
   const b = new StaticBuilder()
   const p = new Placer(b.colliders)
 
-  // ---------- пол и ковры ----------
+  // ---------- пол: крупная плитка в два тона ----------
   b.box(W * 2, 0.1, D * 2, 0, -0.1, 0, 'tile', C.floor)
-  b.rbox(13, 0.015, 8.4, 0.2, -3.6, 0, -8.6, 'carpet', C.carpetA)
-  b.rbox(8.8, 0.015, 8.4, 0.2, 9.2, 0, -8.6, 'carpet', C.carpetB)
-  b.rbox(9, 0.015, 10, 0.2, -14.6, 0, 6.6, 'carpet', C.carpetC)
-  b.rbox(7.2, 0.015, 7, 0.2, -16.4, 0, -10.6, 'carpet', C.carpetMeet)
+  b.rbox(14, 0.015, 7.2, 0.3, -2.4, 0, -10.2, 'carpet', C.carpetA)
+  b.rbox(7.4, 0.015, 7.2, 0.3, 9.4, 0, -10.2, 'carpet', C.carpetB)
+  b.rbox(9.6, 0.015, 11, 0.3, -14.4, 0, 4.4, 'carpet', C.carpetC)
+  b.rbox(6.8, 0.015, 6.4, 0.3, -16.6, 0, -10.9, 'carpet', C.carpetMeet)
+  b.rbox(6.2, 0.015, 6.2, 0.3, 16.8, 0, -11.2, 'carpet', C.carpetBoss)
 
   // ---------- стены ----------
-  // северная: окна, двери лифта посередине
   for (let i = 0; i < 14; i++) {
     const x = -W + PIECE / 2 + i * PIECE
     const name = i === 7 ? 'wall_doorway' : i % 3 === 1 ? 'wall' : 'wall_window_open'
     p.put('kitchen', name, x, -D, 0, { collide: false })
   }
   b.blocker(0, -D, W * 2, 0.4)
-  // западная
   for (let i = 0; i < 10; i++) {
     const z = -D + PIECE / 2 + i * PIECE
     const name = i === 4 ? 'wall_doorway' : i % 3 === 2 ? 'wall_window_open' : 'wall'
     p.put('kitchen', name, -W, z, Math.PI / 2, { collide: false })
   }
   b.blocker(-W, 0, 0.4, D * 2)
-  // ближние к камере стены — низкий бортик, чтобы не загораживать вид
+  // «небо» за окнами — розовое свечение
+  b.box(W * 2, 3, 0.05, 0, 0, -D - 0.9, 'light', 0xffe3e6)
+  b.box(0.05, 3, D * 2, -W - 0.9, 0, 0, 'light', 0xffe3e6)
   lowWall(b, 'x', D, -W, W, [[-7.4, -4.6]])
   lowWall(b, 'z', W, -D, D, [[-9, -6]])
 
-  // ---------- лифты (точки появления, цели режима «Документы») ----------
+  // ---------- лифты ----------
   const spawns: Spawn[] = [
     elevator(b, -W + PIECE * 7.5, -D, 0),
     elevator(b, -W, -D + PIECE * 4.5, Math.PI / 2),
@@ -104,39 +123,71 @@ export function buildOffice(): Office {
     elevator(b, W, -7.5, -Math.PI / 2),
   ]
 
-  // ---------- переговорка (северо-запад) ----------
-  glassWall(b, 'z', -12.6, -D + 0.2, -7, [[-9.4, -7.9]])
-  glassWall(b, 'x', -7, -W + 0.2, -12.6, [[-16.9, -15.4]])
-  p.put('furniture', 'table_medium_long', -16.4, -10.8, 0, { scale: 1.15 })
+  // ---------- переговорка (СЗ) ----------
+  glassWall(b, 'z', -13, -D + 0.2, -7.6, [[-9.6, -8.2]])
+  glassWall(b, 'x', -7.6, -W + 0.2, -13, [[-17.4, -15.9]])
+  p.put('furniture', 'table_medium_long', -16.6, -11, 0, { scale: 1.1 })
   for (let i = 0; i < 3; i++) {
-    p.put('furniture', 'chair_C', -18 + i * 1.6, -12.5, 0, { collide: false })
-    p.put('furniture', 'chair_C', -18 + i * 1.6, -9.1, Math.PI, { collide: false })
+    p.put('furniture', 'chair_C', -18.1 + i * 1.5, -12.6, 0, { collide: false })
+    p.put('furniture', 'chair_C', -18.1 + i * 1.5, -9.4, Math.PI, { collide: false })
   }
-  p.put('furniture', 'book_set', -16.8, -10.9, 0.3, { y: 0.72 * 1.15 + 0.18 })
-  p.put('furniture', 'lamp_standing', -19.3, -8, 0)
-  p.put('furniture', 'cactus_medium_A', -13.4, -13.6, 0)
+  p.put('furniture', 'book_set', -16.9, -11.1, 0.3, { y: 0.8 + 0.13 })
+  p.put('furniture', 'lamp_standing', -19.2, -8.4, 0)
 
-  // ---------- open-space: столы ----------
-  const desksA: [number, number, number][] = [[-8, -10.3, 0], [-3.4, -10.3, 0], [-8, -6.9, 0], [-3.4, -6.9, 0]]
-  const desksB: [number, number, number][] = [[6.8, -10.3, 0], [11.4, -10.3, 0], [6.8, -6.9, 0], [11.4, -6.9, 0]]
-  const desksC: [number, number, number][] = [[-16.6, 3.3, Math.PI / 2], [-12.8, 3.3, Math.PI / 2], [-16.6, 9.1, Math.PI / 2], [-12.8, 9.1, Math.PI / 2]]
-  for (const [x, z, r] of [...desksA, ...desksB, ...desksC]) desk(b, p, x, z, r)
+  // ---------- кабинет Босса (СВ): стеклянный куб, ковёр-коралл, глобус ----------
+  glassWall(b, 'z', 13.6, -D + 0.2, -8, [[-10.6, -9.1]])
+  glassWall(b, 'x', -8, 13.6, W - 0.2, [])
+  p.put('furniture', 'table_medium_long', 17, -11.6, 0, { scale: 1.2 })
+  p.put('furniture', 'armchair_pillows', 17, -13.3, 0, { scale: 0.85 })
+  p.put('furniture', 'chair_A', 16.2, -9.9, Math.PI, { collide: false })
+  p.put('furniture', 'chair_A', 17.8, -9.9, Math.PI, { collide: false })
+  p.put('furniture', 'lamp_table', 18.3, -11.8, 0, { y: 0.86, scale: 0.7, collide: false })
+  p.put('furniture', 'shelf_B_large_decorated', W - 0.2, -11.4, -Math.PI / 2, { y: 1.2 })
+  globe(b, 14.6, -13.4)
+  b.rbox(1.6, 0.5, 0.06, 0.03, 17, 1.7, -D + 0.25, 'plastic', MV.mustard) // табличка «BOSS»
 
-  // ---------- лаунж (юг, центр) ----------
-  p.put('furniture', 'rug_rectangle_stripes_A', 1, 9.6, 0, { scale: 1.6, collide: false })
-  p.put('furniture', 'couch_pillows', 1, 12.2, Math.PI)
-  p.put('furniture', 'armchair_pillows', -2.4, 9.4, Math.PI / 2)
-  p.put('furniture', 'armchair_pillows', 4.4, 9.4, -Math.PI / 2)
-  p.put('furniture', 'table_low', 1, 9.4, 0)
-  p.put('furniture', 'book_set', 1.3, 9.4, 0.4, { y: 0.36 + 0.1 })
-  p.put('furniture', 'lamp_standing', -2.6, 12.6, 0)
-  p.put('furniture', 'cactus_medium_B', 4.6, 12.8, 0)
-
-  // ---------- кухня (юго-восток) ----------
-  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
-    p.put('kitchen', 'floor_kitchen', 13.1 + i * PIECE, 6.1 + j * PIECE, 0, { y: -0.36 + 0.02, collide: false })
+  // ---------- open-space «Север» ----------
+  for (const [x, z] of [[-7.6, -11.4], [-2.6, -11.4], [-7.6, -8.4], [-2.6, -8.4], [6.2, -11.4], [6.2, -8.4], [10.8, -11.4], [10.8, -8.4]] as const) {
+    desk(b, p, x, z, 0)
   }
-  // линия гарнитура вдоль восточной стены
+
+  // ---------- колоннада с арками: делит этаж, даёт укрытия ----------
+  colonnade(b, -12, 12.6, -5.2, [-1.4, 3.4])
+
+  // ---------- атриум: бассейн, островок с кулером, 4 мостика ----------
+  const cooler = { x: 1, z: 1.8, radius: 2.4 }
+  atrium(b, cooler.x, cooler.z)
+  waterCooler(b, cooler.x, cooler.z, cooler.radius)
+
+  // ---------- теннисный стол — офисная классика и укрытие ----------
+  pingPong(b, 10.4, 3.4, Math.PI / 2)
+
+  // ---------- серверная (В) ----------
+  serverRoom(b)
+
+  // ---------- open-space «Запад» ----------
+  for (const [x, z] of [[-16.4, 1.4], [-12.4, 1.4], [-16.4, 6.8], [-12.4, 6.8]] as const) desk(b, p, x, z, Math.PI / 2)
+
+  // ---------- невозможная лестница: поднимается и уходит в стену ----------
+  impossibleStairs(b, -W + 0.25, 11.4)
+
+  // ---------- ресепшен у южного лифта ----------
+  reception(b, p, -6, 10.6)
+
+  // ---------- лаунж ----------
+  p.put('furniture', 'rug_oval_A', 2.6, 10.6, 0, { scale: 1.7, collide: false })
+  p.put('furniture', 'couch_pillows', 2.6, 12.8, Math.PI)
+  p.put('furniture', 'armchair_pillows', -0.6, 10.4, Math.PI / 2)
+  p.put('furniture', 'armchair_pillows', 5.8, 10.4, -Math.PI / 2)
+  p.put('furniture', 'table_low', 2.6, 10.4, 0)
+  p.put('furniture', 'book_set', 2.9, 10.4, 0.4, { y: 0.46 })
+  p.put('furniture', 'lamp_standing', -0.8, 13, 0)
+
+  // ---------- кухня (ЮВ) ----------
+  // пол кухни — крупная клетка мята/крем
+  for (let i = 0; i < 7; i++) for (let j = 0; j < 7; j++) {
+    b.box(1.18, 0.012, 1.18, 12.4 + i * 1.2, 0, 7.2 + j * 1.2, 'paint', (i + j) % 2 ? MV.mint : MV.creamLight)
+  }
   p.put('kitchen', 'kitchencounter_straight_A_backsplash', W - 0.75, 7.6, -Math.PI / 2)
   p.put('kitchen', 'kitchencounter_sink_backsplash', W - 0.75, 9.04, -Math.PI / 2)
   p.put('kitchen', 'kitchencounter_straight_A_decorated', W - 0.75, 10.48, -Math.PI / 2)
@@ -144,33 +195,15 @@ export function buildOffice(): Office {
   p.put('kitchen', 'fridge_A_decorated', W - 0.9, 13.4, -Math.PI / 2)
   p.put('kitchen', 'kitchentable_A_large_decorated', 15, 9.4, Math.PI / 2)
   for (const z of [8.4, 9.4, 10.4]) p.put('kitchen', 'chair_stool', 13.9, z, 0, { collide: false })
-  p.put('kitchen', 'table_round_A_decorated', 13.4, 13, 0)
+  p.put('kitchen', 'table_round_A_decorated', 13.2, 13, 0)
 
-  // ---------- серверная (восток) ----------
-  serverRoom(b)
-
-  // ---------- склад и колонны-укрытия ----------
-  p.put('proto', 'Pallet_Small_Decorated_A', 16.6, -12.6, 0.2)
-  p.put('proto', 'Pallet_Small_Decorated_B', 18.6, -10.6, -0.1)
-  p.put('proto', 'Box_A', 15.2, -11.2, 0.4)
-  p.put('proto', 'Box_B', 15.4, -12.3, -0.2)
-  p.put('kitchen', 'pillar_A', -6, 0.6, 0, { scale: 1.05 })
-  p.put('kitchen', 'pillar_A', 8, 0.6, 0, { scale: 1.05 })
-  p.put('furniture', 'cabinet_medium_decorated', -2.6, -2.8, 0)
-  p.put('furniture', 'cabinet_medium_decorated', 3.8, 4.4, Math.PI)
-  p.put('furniture', 'shelf_B_large_decorated', -9.6, -0.6, Math.PI / 2, { y: 0.9 })
-  p.put('furniture', 'cabinet_medium_decorated', -9.6, -0.6, Math.PI / 2)
-  p.put('furniture', 'cabinet_medium_decorated', 12.4, -2.6, 0)
-
-  // кулер — центр карты, зона режима «Кулер»
-  const cooler = { x: 1, z: 1, radius: 2.4 }
-  waterCooler(b, cooler.x, cooler.z, cooler.radius)
-
-  // зелень
-  for (const [x, z, n] of [
-    [-19, 13.2, 'A'], [-7.8, 13.3, 'B'], [8.4, 13.2, 'A'], [-11.6, -13.4, 'B'], [3.6, -13.5, 'A'],
-    [14.2, -13.4, 'B'], [-5, 2.6, 'A'], [6.6, -1.6, 'B'], [-19.2, -3.2, 'A'],
-  ] as const) p.put('furniture', `cactus_medium_${n}`, x, z, rand() * 6)
+  // ---------- зелень: кактусы KayKit и геометрические деревца в духе MV ----------
+  for (const [x, z, n] of [[-11.6, -13.5, 'A'], [3.8, -13.5, 'B'], [-19.2, -4, 'A'], [8.8, 13.2, 'B'], [-10, 13.2, 'A']] as const) {
+    p.put('furniture', `cactus_medium_${n}`, x, z, rand() * 6)
+  }
+  for (const [x, z, s] of [[-13, -5.2, 1], [13.6, -5.2, 1], [-6.6, 4.6, 0.85], [8.4, 4.6, 0.85], [13.4, -1, 1.1], [-19, 13, 1.1]] as const) {
+    topiary(b, x, z, s)
+  }
 
   const group = b.build()
   group.add(p.group)
@@ -184,7 +217,149 @@ export function buildOffice(): Office {
   }
 }
 
-// ======================= элементы =======================
+// ======================= архитектура в духе Monument Valley =======================
+
+/** Колоннада: квадратные колонны, полукруглые арки, карниз. gaps — проходы без колонн */
+function colonnade(b: StaticBuilder, x0: number, x1: number, z: number, skip: number[]): void {
+  const step = 2.8
+  const n = Math.round((x1 - x0) / step)
+  const posts: number[] = []
+  for (let i = 0; i <= n; i++) posts.push(x0 + i * step)
+  const H = 1.75
+  for (const x of posts) {
+    if (skip.some((s) => Math.abs(s - x) < 0.5)) continue
+    b.box(0.56, 0.12, 0.56, x, 0, z, 'paint', C.archAlt)
+    b.box(0.46, H, 0.46, x, 0.12, z, 'paint', C.pillar, { collide: true })
+    b.box(0.56, 0.1, 0.56, x, H + 0.12, z, 'paint', C.archAlt)
+  }
+  // арки между соседними колоннами
+  for (let i = 0; i < posts.length - 1; i++) {
+    const a = posts[i], c = posts[i + 1]
+    if (skip.some((s) => Math.abs(s - a) < 0.5 || Math.abs(s - c) < 0.5)) continue
+    const r = (c - a) / 2 - 0.23
+    const arch = new THREE.TorusGeometry(r, 0.11, 6, 20, Math.PI)
+    b.geo(arch, (a + c) / 2, H + 0.22 - r * 0.55, z, 'paint', i % 2 ? C.arch : C.archAlt)
+  }
+}
+
+/** Атриум: кольцо воды вокруг острова с кулером и четыре мостика */
+function atrium(b: StaticBuilder, cx: number, cz: number): void {
+  const rIn = 2.7, rOut = 5.1
+  const ring = (r0: number, r1: number, y: number, kind: 'paint' | 'plastic' | 'matte', hex: number) => {
+    const g = new THREE.RingGeometry(r0, r1, 64)
+    g.rotateX(-Math.PI / 2)
+    b.geo(g, cx, y, cz, kind, hex)
+  }
+  // вода чуть ниже пола: светлая кромка и тёмная глубина
+  ring(rIn, rOut, 0.012, 'plastic', C.water)
+  ring(rIn + 0.15, rIn + 0.55, 0.014, 'plastic', C.waterLight)
+  ring(rOut - 0.5, rOut - 0.2, 0.014, 'plastic', C.waterLight)
+  // бортики
+  for (const r of [rIn, rOut]) {
+    const t = new THREE.TorusGeometry(r, 0.09, 6, 64)
+    t.rotateX(-Math.PI / 2)
+    b.geo(t, cx, 0.08, cz, 'paint', C.rim)
+  }
+  // кувшинки и плавающие фигуры
+  for (let i = 0; i < 9; i++) {
+    const a = rand() * Math.PI * 2
+    const r = rIn + 0.6 + rand() * (rOut - rIn - 1.2)
+    const g = new THREE.CylinderGeometry(0.22, 0.22, 0.02, 7)
+    b.geo(g, cx + Math.cos(a) * r, 0.03, cz + Math.sin(a) * r, 'matte', i % 3 ? MV.teal : MV.blush)
+  }
+  // мостики на север, юг, запад, восток; кольцо воды непроходимо между ними
+  const bridges = [0, Math.PI / 2, Math.PI, Math.PI * 1.5]
+  for (const a of bridges) {
+    const r = (rIn + rOut) / 2
+    const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r
+    const along = Math.abs(Math.cos(a)) > 0.5 // мост вдоль X
+    const len = rOut - rIn + 0.6
+    if (along) {
+      b.rbox(len, 0.12, 1.5, 0.05, x, 0.02, z, 'wood', 0xffffff)
+      b.box(len, 0.3, 0.07, x, 0.12, z - 0.78, 'paint', C.arch)
+      b.box(len, 0.3, 0.07, x, 0.12, z + 0.78, 'paint', C.arch)
+    } else {
+      b.rbox(1.5, 0.12, len, 0.05, x, 0.02, z, 'wood', 0xffffff)
+      b.box(0.07, 0.3, len, x - 0.78, 0.12, z, 'paint', C.arch)
+      b.box(0.07, 0.3, len, x + 0.78, 0.12, z, 'paint', C.arch)
+    }
+  }
+  // коллайдеры воды: короткие отрезки по дуге, кроме мостов
+  const rMid = (rIn + rOut) / 2
+  for (let deg = 0; deg < 360; deg += 10) {
+    const a = (deg * Math.PI) / 180
+    const nearBridge = bridges.some((bA) => {
+      let d = Math.abs(a - bA) % (Math.PI * 2)
+      if (d > Math.PI) d = Math.PI * 2 - d
+      return d < 0.32
+    })
+    if (nearBridge) continue
+    b.blocker(cx + Math.cos(a) * rMid, cz + Math.sin(a) * rMid, 1.6, 1.6)
+  }
+}
+
+/** Лестница, которая поднимается вдоль западной стены и уходит в неё */
+function impossibleStairs(b: StaticBuilder, x: number, z: number): void {
+  const n = 9
+  for (let i = 0; i < n; i++) {
+    const h = 0.32 * (i + 1)
+    const sz = z - i * 0.55
+    b.box(1.3, h, 0.55, x + 0.65, 0, sz, 'paint', i % 2 ? C.step : C.stepSide)
+    b.box(1.3, 0.04, 0.55, x + 0.65, h, sz, 'paint', C.pillar)
+  }
+  // дверь в стене наверху — никуда
+  b.rbox(0.1, 1.6, 0.9, 0.04, x + 0.02, 0.32 * n, z - (n - 1) * 0.55, 'paint', MV.indigo)
+  b.rbox(0.12, 0.08, 0.08, 0.03, x + 0.1, 0.32 * n + 0.8, z - (n - 1) * 0.55 + 0.25, 'plastic', MV.mustard)
+  b.blocker(x + 0.65, z - (n - 1) * 0.275, 1.3, n * 0.55)
+}
+
+function reception(b: StaticBuilder, p: Placer, x: number, z: number): void {
+  // полукруглая стойка, фронтом к залу
+  const g = new THREE.CylinderGeometry(1.6, 1.6, 1.05, 32, 1, true, Math.PI / 2, Math.PI)
+  b.geo(g, x, 0.525, z, 'paint', MV.coral)
+  const top = new THREE.RingGeometry(1.42, 1.72, 32, 1, Math.PI, Math.PI)
+  top.rotateX(-Math.PI / 2)
+  b.geo(top, x, 1.06, z, 'paint', MV.creamLight)
+  b.blocker(x, z - 0.8, 3.4, 1.7)
+  p.put('furniture', 'chair_C', x, z + 0.6, Math.PI, { collide: false })
+  b.rbox(0.5, 0.32, 0.04, 0.02, x - 0.4, 1.07, z - 1.0, 'plastic', MV.indigo)
+  b.cylinder(0.12, 0.1, 0.25, x + 0.7, 1.07, z - 1.1, 'paint', MV.mint, { segments: 12 })
+}
+
+function pingPong(b: StaticBuilder, x: number, z: number, rot: number): void {
+  const L = 2.74, Wd = 1.52
+  b.box(L, 0.05, Wd, x, 0.72, z, 'paint', MV.teal, { rotY: rot, collide: true })
+  b.box(L, 0.006, 0.03, x, 0.77, z, 'paint', MV.white, { rotY: rot })
+  b.box(0.03, 0.006, Wd, x, 0.77, z, 'paint', MV.white, { rotY: rot })
+  b.box(0.02, 0.16, Wd + 0.1, x, 0.77, z, 'paint', MV.white, { rotY: rot }) // сетка
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const lx = sx * (L / 2 - 0.15), lz = sz * (Wd / 2 - 0.12)
+    const c = Math.cos(rot), s = Math.sin(rot)
+    b.box(0.06, 0.72, 0.06, x + lx * c + lz * s, 0, z - lx * s + lz * c, 'paint', MV.indigo)
+  }
+  b.sphere(0.03, x + 0.3, 0.8, z + 0.5, 'paint', MV.mustard)
+  b.rbox(0.16, 0.02, 0.26, 0.01, x - 0.4, 0.75, z - 0.6, 'paint', MV.coral, { rotY: 0.6 })
+}
+
+function globe(b: StaticBuilder, x: number, z: number): void {
+  b.cylinder(0.25, 0.3, 0.06, x, 0, z, 'paint', MV.indigo)
+  b.cylinder(0.03, 0.03, 0.9, x, 0.06, z, 'paint', MV.mustard, { segments: 8 })
+  b.sphere(0.32, x, 1.2, z, 'paint', MV.sky)
+  const t = new THREE.TorusGeometry(0.38, 0.025, 6, 32)
+  t.rotateY(0.4)
+  b.geo(t, x, 1.2, z, 'paint', MV.mustard)
+  b.blocker(x, z, 0.7, 0.7)
+}
+
+/** Геометрическое деревце: горшок-цилиндр и шары кроны */
+function topiary(b: StaticBuilder, x: number, z: number, s: number): void {
+  b.cylinder(0.32 * s, 0.26 * s, 0.5 * s, x, 0, z, 'paint', C.pot, { collide: true, segments: 16 })
+  b.cylinder(0.04 * s, 0.05 * s, 0.6 * s, x, 0.5 * s, z, 'darkwood', 0xffffff, { segments: 6 })
+  b.sphere(0.52 * s, x, 1.35 * s, z, 'paint', C.leaf)
+  b.sphere(0.34 * s, x + 0.25 * s, 1.75 * s, z - 0.1 * s, 'paint', C.leafLight)
+}
+
+// ======================= мебель и техника =======================
 
 /** Стол на двоих лицом к лицу: стол и стулья KayKit, мониторы — свои */
 function desk(b: StaticBuilder, p: Placer, x: number, z: number, rot: number): void {

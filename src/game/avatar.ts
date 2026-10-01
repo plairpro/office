@@ -18,17 +18,17 @@ type Rule = [x0: number, y0: number, x1: number, y1: number, color: number | 'P'
 type Look = { base: BaseChar; rules: Partial<Record<Group, Rule[]>>; accessories: (rig: Rig, color: number) => void }
 
 const SKIN = 0xf5c4a0
-const INK = 0x3d3557
+const INK = 0x4d4a7d
 
 const LOOKS: Record<CharacterId, Look> = {
   // Курьер ← рыцарь: поло цвета игрока, джинсы, кеды, кепка, коробка пиццы
   courier: {
     base: 'knight',
     rules: {
-      Body: [[6, 0, 9, 3, 'P'], [14, 0, 15, 2, 'P+'], [12, 0, 13, 3, 0x6b5a6e], [0, 4, 3, 7, 0xffffff],
-        [4, 4, 5, 6, 'P'], [14, 5, 15, 7, 0x6b5a6e]],
+      Body: [[6, 0, 9, 3, 'P'], [14, 0, 15, 2, 'P+'], [12, 0, 13, 3, 0x6a5a86], [0, 4, 3, 7, 0xffffff],
+        [4, 4, 5, 6, 'P'], [14, 5, 15, 7, 0x6a5a86]],
       Arm: [[6, 0, 9, 3, 'P'], [14, 0, 15, 2, 'P+'], [12, 0, 13, 3, SKIN]],
-      Leg: [[6, 0, 9, 3, 0x7d9fd9], [14, 0, 15, 2, 0x8fb0e6], [12, 0, 13, 3, 0x7d9fd9], [14, 5, 15, 7, 0xf7f7fb]],
+      Leg: [[6, 0, 9, 3, 0x8aa6dc], [14, 0, 15, 2, 0xa3bce6], [12, 0, 13, 3, 0x8aa6dc], [14, 5, 15, 7, 0xf7f7fb]],
     },
     accessories: (rig, color) => { cap(rig, color); pizza(rig) },
   },
@@ -36,10 +36,10 @@ const LOOKS: Record<CharacterId, Look> = {
   boss: {
     base: 'barbarian',
     rules: {
-      Body: [[0, 4, 3, 7, 0xfbfaf6], [4, 4, 5, 7, 0xf1f0ec], [12, 0, 13, 3, 'P'], [14, 0, 15, 3, 0x55597a],
-        [6, 0, 7, 3, 0xe0bf6a], [14, 5, 15, 6, 0x55597a]],
+      Body: [[0, 4, 3, 7, 0xfbfaf6], [4, 4, 5, 7, 0xf1f0ec], [12, 0, 13, 3, 'P'], [14, 0, 15, 3, 0x5a5888],
+        [6, 0, 7, 3, 0xe0bf6a], [14, 5, 15, 6, 0x5a5888]],
       Arm: [[0, 4, 3, 7, 0xfbfaf6], [4, 4, 5, 7, 0xf1f0ec], [12, 0, 13, 3, 0xfbfaf6], [14, 9, 15, 11, 0xfbfaf6]],
-      Leg: [[6, 8, 7, 11, 0x55597a], [4, 4, 5, 7, INK], [14, 5, 15, 6, INK]],
+      Leg: [[6, 8, 7, 11, 0x5a5888], [4, 4, 5, 7, INK], [14, 5, 15, 6, INK]],
     },
     accessories: (rig, color) => tie(rig, color),
   },
@@ -61,7 +61,7 @@ const LOOKS: Record<CharacterId, Look> = {
     rules: {
       Body: [[0, 4, 3, 7, 'P'], [10, 0, 11, 2, INK], [12, 0, 13, 3, INK], [6, 0, 7, 2, 0xe8c56a], [14, 6, 15, 7, 'P']],
       Arm: [[0, 4, 3, 7, 'P'], [10, 0, 11, 2, SKIN], [10, 9, 11, 11, SKIN]],
-      Leg: [[14, 6, 15, 7, SKIN], [6, 8, 7, 10, 0xe0457b]],
+      Leg: [[14, 6, 15, 7, SKIN], [6, 8, 7, 10, 0xe9877a]],
     },
     accessories: () => {},
   },
@@ -88,7 +88,8 @@ function recolor(src: THREE.Texture, rules: Rule[], player: number): THREE.Textu
   const px = data.data
   const tmp = new THREE.Color()
   for (const [x0, y0, x1, y1, col] of rules) {
-    const hex = col === 'P' ? player : col === 'P+' ? lighten(player, 0.35) : col
+    // одежда чуть светлее чистого цвета игрока — насыщенный красный оставляем только крови
+    const hex = col === 'P' ? lighten(player, 0.2) : col === 'P+' ? lighten(player, 0.45) : col
     tmp.setHex(hex)
     const tr = tmp.r * 255, tg = tmp.g * 255, tb = tmp.b * 255
     const X0 = x0 * 64 * k, Y0 = y0 * 64 * k, X1 = (x1 + 1) * 64 * k, Y1 = (y1 + 1) * 64 * k

@@ -349,7 +349,9 @@ function frame(time: number): void {
 
   // в меню камера ближе — крупный план персонажа
   camZoom += ((me ? 1 : 0.42) - camZoom) * (1 - Math.exp(-4 * dt))
-  camera.position.copy(camTarget).addScaledVector(camOffset, camZoom)
+  const far = new URLSearchParams(location.search).has('overview')
+  if (far) camTarget.set(0, 0, 0)
+  camera.position.copy(camTarget).addScaledVector(camOffset, far ? 2.6 : camZoom)
   camera.lookAt(camTarget)
   gfx.render()
 
