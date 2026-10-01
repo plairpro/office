@@ -1,0 +1,314 @@
+import * as THREE from 'three'
+import { GAME, PLAYER_COLORS } from './config/game'
+import { buildOffice } from './scene/office'
+import { Avatar, stepBody, type Body } from './game/avatar'
+import { Input } from './game/input'
+import { NetRoom, makeRoomCode, readRoomCode, type StatePacket } from './net/room'
+import { $, showToast, loadName, saveName } from './ui/dom'
+
+// ---------- рендер ----------
+
+const host = $('game')
+const renderer = new THREE.WebGLRenderer({
+  antialias: window.devicePixelRatio < 2,
+  powerPreference: 'high-performance',
+})
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75))
+renderer.shadowMap.enabled = true
+renderer.shadowMap.type = THREE.PCFShadowMap
+renderer.toneMapping = THREE.ACESFilmicToneMapping
+renderer.toneMappingExposure = 1.05
+host.appendChild(renderer.domElement)
+
+const scene = new THREE.Scene()
+scene.background = new THREE.Color(0x1d2129)
+scene.fog = new THREE.Fog(0x1d2129, 40, 75)
+
+scene.add(new THREE.HemisphereLight(0xfff4e0, 0x5a6478, 1.5))
+const sun = new THREE.DirectionalLight(0xfff1dc, 1.7)
+sun.position.set(-10, 26, 9)
+sun.castShadow = true
+sun.shadow.mapSize.set(2048, 2048)
+sun.shadow.camera.left = -24
+sun.shadow.camera.right = 24
+sun.shadow.camera.top = 20
+sun.shadow.camera.bottom = -20
+sun.shadow.camera.far = 70
+sun.shadow.bias = -0.0005
+sun.shadow.normalBias = 0.03
+scene.add(sun, sun.target)
+
+const office = buildOffice()
+scene.add(office.group)
+
+const camera = new THREE.PerspectiveCamera(GAME.camera.fov, 1, 1, 120)
+const camOffset = new THREE.Vector3(GAME.camera.offset.x, GAME.camera.offset.y, GAME.camera.offset.z)
+const camTarget = new THREE.Vector3()
+
+function resize(): void {
+  const w = window.innerWidth, h = window.innerHeight
+  renderer.setSize(w, h)
+  camera.aspect = w / h
+  // на узком экране (телефон вертикально) отъезжаем, чтобы видеть больше
+  camera.fov = GAME.camera.fov * (w / h < 1 ? 1.45 : 1)
+  camera.updateProjectionMatrix()
+}
+window.addEventListener('resize', resize)
+resize()
+
+// ---------- игроки ----------
+
+const input = new Input(renderer.domElement)
+
+interface Local { avatar: Avatar; body: Body; facing: number }
+interface Remote { avatar: Avatar; body: Body; target: Body; facing: number; lastAt: number }
+
+let me: Local | null = null
+const remotes = new Map<string, Remote>()
+let net: NetRoom | null = null
+
+function spawnLocal(name: string, slot: number): void {
+  const sp = office.spawns[slot % office.spawns.length]
+  const avatar = new Avatar(name, PLAYER_COLORS[slot], slot)
+  avatar.root.position.set(sp.x, 0, sp.z)
+  scene.add(avatar.root)
+  me = { avatar, body: { x: sp.x, z: sp.z, vx: 0, vz: 0 }, facing: sp.rot }
+  camTarget.set(sp.x, 0, sp.z)
+}
+
+function rosterChanged(): void {
+  if (!net || !me) return
+  const list = net.ordered()
+  list.forEach((p, rank) => {
+    const color = PLAYER_COLORS[rank % PLAYER_COLORS.length]
+    if (p.id === net!.selfId) {
+      me!.avatar.setColor(color)
+      me!.avatar.setName(p.name, color)
+    } else {
+      let r = remotes.get(p.id)
+      if (!r) {
+        const sp = office.spawns[rank % office.spawns.length]
+        const avatar = new Avatar(p.name, color, rank)
+        avatar.root.position.set(sp.x, 0, sp.z)
+        scene.add(avatar.root)
+        const b = { x: sp.x, z: sp.z, vx: 0, vz: 0 }
+        r = { avatar, body: { ...b }, target: { ...b }, facing: sp.rot, lastAt: performance.now() }
+        remotes.set(p.id, r)
+      } else {
+        r.avatar.setColor(color)
+        r.avatar.setName(p.name, color)
+      }
+    }
+  })
+  renderRoster()
+}
+
+function removeRemote(id: string): void {
+  const r = remotes.get(id)
+  if (!r) return
+  scene.remove(r.avatar.root)
+  r.avatar.dispose()
+  remotes.delete(id)
+}
+
+function renderRoster(): void {
+  const ul = $('roster')
+  ul.textContent = ''
+  const list = net ? net.ordered() : [{ id: 'me', name: myName, joinedAt: 0 }]
+  list.forEach((p, i) => {
+    const li = document.createElement('li')
+    const dot = document.createElement('i')
+    dot.style.background = '#' + PLAYER_COLORS[i % 4].toString(16).padStart(6, '0')
+    li.append(dot, document.createTextNode(p.name))
+    if (!net || p.id === net.selfId) li.className = 'me'
+    ul.appendChild(li)
+  })
+  const free = GAME.maxPlayers - list.length
+  $('net-status').textContent = !net
+    ? 'Тренировка в одиночку'
+    : free > 0 ? `Ждём коллег: свободно мест — ${free}` : 'Комната заполнена'
+}
+
+// ---------- меню ----------
+
+let myName = loadName()
+const nameInput = $('name') as HTMLInputElement
+nameInput.value = myName
+const invitedCode = readRoomCode()
+if (invitedCode) {
+  $('menu-tagline').textContent = `Тебя позвали в комнату ${invitedCode}. Залетай!`
+  $('btn-main').textContent = 'Войти в матч'
+}
+
+function startGame(code: string | null): void {
+  myName = nameInput.value.trim().slice(0, 16) || 'Стажёр'
+  saveName(myName)
+  $('menu').hidden = true
+  $('hud').hidden = false
+
+  if (!code) {
+    $('room-code').textContent = 'соло'
+    $('btn-invite').hidden = true
+    spawnLocal(myName, 0)
+    renderRoster()
+    return
+  }
+
+  history.replaceState(null, '', `#${code}`)
+  $('room-code').textContent = code
+  $('btn-invite').hidden = false
+  net = new NetRoom(code, myName, {
+    onPeerHello: () => rosterChanged(),
+    onPeerLeave: (id) => { removeRemote(id); rosterChanged() },
+    onPeerState: (id, s) => {
+      const r = remotes.get(id)
+      if (!r) return
+      r.target = { x: s[0], z: s[1], vx: s[3], vz: s[4] }
+      r.facing = s[2]
+      r.lastAt = performance.now()
+    },
+    onRoomFull: () => backToMenu('В этой комнате уже 4 человека. Создай свою и позови коллег!'),
+  })
+  // точка появления — по порядку входа; пока никого не видно, считаем себя первым
+  spawnLocal(myName, 0)
+  setTimeout(() => {
+    if (!net || !me) return
+    const slot = net.rankOf(net.selfId)
+    const sp = office.spawns[slot % office.spawns.length]
+    // переставляем, только если ещё стоим у стартового лифта
+    const sp0 = office.spawns[0]
+    if (slot > 0 && Math.hypot(me.body.x - sp0.x, me.body.z - sp0.z) < 2) {
+      me.body.x = sp.x; me.body.z = sp.z
+    }
+    rosterChanged()
+  }, 1500)
+  renderRoster()
+}
+
+function backToMenu(error?: string): void {
+  net?.leave()
+  net = null
+  for (const id of [...remotes.keys()]) removeRemote(id)
+  if (me) { scene.remove(me.avatar.root); me.avatar.dispose(); me = null }
+  history.replaceState(null, '', location.pathname)
+  $('hud').hidden = true
+  $('menu').hidden = false
+  $('btn-main').textContent = 'Создать матч'
+  $('menu-tagline').textContent = 'Быстрый PvP на 2–4 коллег. Без регистрации.'
+  const err = $('menu-error')
+  err.hidden = !error
+  err.textContent = error ?? ''
+}
+
+$('btn-main').addEventListener('click', () => startGame(readRoomCode() ?? makeRoomCode()))
+$('btn-solo').addEventListener('click', () => startGame(null))
+nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-main').click() })
+
+$('btn-invite').addEventListener('click', async () => {
+  if (!net) return
+  const url = `${location.href.split('#')[0]}#${net.code}`
+  const text = `${myName} вызывает тебя на офисную разборку! Комната ${net.code}`
+  const coarse = window.matchMedia('(pointer: coarse)').matches
+  if (coarse && navigator.share) {
+    try { await navigator.share({ title: 'Офисная ярость', text, url }); return } catch { /* отменили */ }
+  }
+  try {
+    await navigator.clipboard.writeText(`${text}\n${url}`)
+    showToast(location.protocol === 'file:'
+      ? 'Это локальный файл: ссылка сработает только на этом компьютере. Открой её во втором окне'
+      : 'Ссылка скопирована — кинь её в рабочий чат', 4500)
+  } catch {
+    window.prompt('Скопируй ссылку и отправь коллегам:', url)
+  }
+})
+
+// ---------- цикл ----------
+
+const aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1)
+const ray = new THREE.Raycaster()
+const aimPoint = new THREE.Vector3()
+const timer = new THREE.Timer()
+timer.connect(document)
+let sendAcc = 0
+let fpsAcc = 0, fpsFrames = 0
+
+function frame(time: number): void {
+  timer.update(time)
+  const dt = Math.min(timer.getDelta(), 0.05)
+
+  if (me) {
+    const dir = input.moveDir()
+    stepBody(me.body, dir.x, dir.z, dt, office.colliders)
+    const speed = Math.hypot(me.body.vx, me.body.vz)
+
+    // взгляд: на мышь, а на телефоне — по направлению движения
+    let hasAim = false
+    if (input.hasMouse && !input.touchActive) {
+      ray.setFromCamera(input.mouseNdc, camera)
+      if (ray.ray.intersectPlane(aimPlane, aimPoint)) {
+        me.facing = Math.atan2(aimPoint.x - me.body.x, aimPoint.z - me.body.z)
+        hasAim = true
+      }
+    } else if (speed > 0.5) {
+      me.facing = Math.atan2(me.body.vx, me.body.vz)
+    }
+    me.avatar.root.position.set(me.body.x, 0, me.body.z)
+    me.avatar.animate(dt, speed, me.facing)
+
+    // камера: следует за игроком с небольшим сдвигом к прицелу
+    const lead = hasAim ? GAME.camera.aimLead : 0
+    const tx = me.body.x + (hasAim ? (aimPoint.x - me.body.x) * lead : me.body.vx * 0.12)
+    const tz = me.body.z + (hasAim ? (aimPoint.z - me.body.z) * lead : me.body.vz * 0.12)
+    const k = 1 - Math.exp(-GAME.camera.follow * dt)
+    camTarget.x += (tx - camTarget.x) * k
+    camTarget.z += (tz - camTarget.z) * k
+
+    sendAcc += dt
+    if (net && sendAcc >= 1 / GAME.net.sendRateHz) {
+      sendAcc = 0
+      const r = (n: number) => Math.round(n * 100) / 100
+      const s: StatePacket = [r(me.body.x), r(me.body.z), r(me.facing), r(me.body.vx), r(me.body.vz)]
+      net.broadcastState(s)
+    }
+  } else {
+    // в меню камера медленно облетает офис
+    const t = performance.now() / 9000
+    camTarget.set(Math.sin(t) * 5, 0, Math.cos(t * 0.7) * 3)
+  }
+
+  // чужие игроки: экстраполяция по скорости + сглаживание
+  const now = performance.now()
+  for (const r of remotes.values()) {
+    const age = Math.min((now - r.lastAt) / 1000, 0.25)
+    const px = r.target.x + r.target.vx * age
+    const pz = r.target.z + r.target.vz * age
+    const k = 1 - Math.exp(-14 * dt)
+    r.body.x += (px - r.body.x) * k
+    r.body.z += (pz - r.body.z) * k
+    r.avatar.root.position.set(r.body.x, 0, r.body.z)
+    const speed = age < 0.25 ? Math.hypot(r.target.vx, r.target.vz) : 0
+    r.avatar.animate(dt, speed, lerpAngle(r.avatar.root.userData.f ?? r.facing, r.facing, k))
+    r.avatar.root.userData.f = r.facing
+  }
+
+  camera.position.copy(camTarget).add(camOffset)
+  camera.lookAt(camTarget)
+  renderer.render(scene, camera)
+
+  fpsAcc += dt; fpsFrames++
+  if (fpsAcc > 0.5) {
+    $('fps').textContent = `${Math.round(fpsFrames / fpsAcc)} fps`
+    fpsAcc = 0; fpsFrames = 0
+  }
+  requestAnimationFrame(frame)
+}
+
+function lerpAngle(a: number, b: number, t: number): number {
+  let d = b - a
+  while (d > Math.PI) d -= Math.PI * 2
+  while (d < -Math.PI) d += Math.PI * 2
+  return a + d * t
+}
+
+window.addEventListener('beforeunload', () => net?.leave())
+requestAnimationFrame(frame)

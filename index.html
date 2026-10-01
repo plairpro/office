@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Офисная ярость</title>
+    <meta name="description" content="Быстрый PvP на 2–4 коллег прямо в браузере. Степлеры, швабры, кулер." />
+    <meta property="og:title" content="Офисная ярость — тебя вызывают на разборку" />
+    <meta property="og:description" content="Быстрый PvP на 2–4 коллег прямо в браузере. Без регистрации — просто открой ссылку." />
+    <meta property="og:type" content="website" />
+    <meta name="theme-color" content="#1d2129" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📎</text></svg>" />
+    <link rel="stylesheet" href="./src/ui/style.css" />
+  </head>
+  <body>
+    <div id="game"></div>
+
+    <!-- Меню -->
+    <div id="menu" class="overlay">
+      <div class="card">
+        <div class="logo">ОФИСНАЯ<br /><span>ЯРОСТЬ</span></div>
+        <p class="tagline" id="menu-tagline">Быстрый PvP на 2–4 коллег. Без регистрации.</p>
+        <label class="field">
+          <span>Как тебя зовут в офисе?</span>
+          <input id="name" maxlength="16" autocomplete="nickname" placeholder="Например, Бухгалтер Света" />
+        </label>
+        <button id="btn-main" class="btn primary">Создать матч</button>
+        <button id="btn-solo" class="btn ghost">Побегать одному</button>
+        <p id="menu-error" class="error" hidden></p>
+      </div>
+    </div>
+
+    <!-- HUD -->
+    <div id="hud" hidden>
+      <div class="panel room">
+        <div class="room-code">Комната <b id="room-code">—</b></div>
+        <ul id="roster"></ul>
+        <div id="net-status" class="status"></div>
+      </div>
+      <button id="btn-invite" class="btn primary invite">📨 Позвать коллег</button>
+      <div class="panel fps" id="fps"></div>
+      <div class="hint">WASD — бег · мышь — взгляд</div>
+    </div>
+
+    <div id="stick" hidden><div id="stick-knob"></div></div>
+    <div id="toast" hidden></div>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

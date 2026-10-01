@@ -1,0 +1,24 @@
+{
+  "name": "office-rage",
+  "version": "0.1.0",
+  "description": "Офисная ярость — браузерный PvP на 2–4 игрока",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "build:single": "vite build --config vite.single.config.ts"
+  },
+  "dependencies": {
+    "three": "^0.186.1",
+    "trystero": "^0.25.4"
+  },
+  "devDependencies": {
+    "@types/three": "^0.186.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2",
+    "vite-plugin-singlefile": "^2.3.3"
+  },
+  "type": "module",
+  "private": true
+}
