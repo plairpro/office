@@ -444,18 +444,38 @@ export class Avatar {
     this.label.position.y = this.height + 0.5
     this.root.add(this.label)
 
-    // полоска здоровья над головой
-    const bar = (hex: number, opacity: number) => {
-      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ color: hex, depthTest: false, transparent: true, opacity }))
-      sp.renderOrder = 11
-      sp.position.y = this.height + 0.18
-      sp.scale.set(0.9, 0.07, 1)
-      this.root.add(sp)
-      return sp
+    // полоска здоровья над головой: скруглённая и полупрозрачная, как в углу экрана
+    this.hpCanvas.width = 128
+    this.hpCanvas.height = 16
+    this.hpTex = new THREE.CanvasTexture(this.hpCanvas)
+    this.hpTex.colorSpace = THREE.SRGBColorSpace
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.hpTex, depthTest: false, transparent: true }))
+    sp.renderOrder = 11
+    sp.position.y = this.height + 0.22
+    sp.scale.set(0.9, 0.1125, 1)
+    this.root.add(sp)
+    this.hpBg = this.hpFg = sp
+    this.hpBg.visible = false
+  }
+
+  private hpCanvas = document.createElement('canvas')
+  private hpTex: THREE.CanvasTexture
+  private hpDrawn = -1
+
+  private drawHp(f: number): void {
+    const g = this.hpCanvas.getContext('2d')!
+    const W = 128, H = 16, r = H / 2
+    g.clearRect(0, 0, W, H)
+    g.fillStyle = 'rgba(255, 255, 255, 0.4)'
+    g.beginPath(); g.roundRect(0, 0, W, H, r); g.fill()
+    if (f > 0) {
+      const grad = g.createLinearGradient(0, 0, W, 0)
+      grad.addColorStop(0, 'rgba(211, 18, 42, 0.72)')
+      grad.addColorStop(1, 'rgba(233, 64, 90, 0.72)')
+      g.fillStyle = grad
+      g.beginPath(); g.roundRect(0, 0, Math.max(H, W * f), H, r); g.fill()
     }
-    this.hpBg = bar(0x3d3557, 0.35)
-    this.hpFg = bar(0xd3122a, 0.95)
-    this.hpBg.visible = this.hpFg.visible = false
+    this.hpTex.needsUpdate = true
   }
 
   /** Подпись с именем над головой (в меню прячем) */
@@ -467,8 +487,8 @@ export class Avatar {
     this.hpBg.visible = this.hpFg.visible = show && frac > 0
     if (!show || frac <= 0) return
     const f = Math.min(1, frac)
-    this.hpFg.scale.x = 0.9 * f
-    this.hpFg.center.set(0.5 / f, 0.5)
+    const q = Math.round(f * 100)
+    if (q !== this.hpDrawn) { this.hpDrawn = q; this.drawHp(f) }
   }
 
   private play(key: string, fade = 0.2): void {
@@ -629,7 +649,8 @@ export class Avatar {
       if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose() }
     })
     this.disposables.forEach((d) => d.dispose())
-    for (const sp of [this.hpBg, this.hpFg]) sp.material.dispose()
+    this.hpBg.material.dispose()
+    this.hpTex.dispose()
     this.ring.geometry.dispose()
     ;(this.ring.material as THREE.Material).dispose()
     ;(this.label.material as THREE.SpriteMaterial).map?.dispose()

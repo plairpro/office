@@ -111,7 +111,7 @@ export const WEAPON_IDS: WeaponId[] = ['cutter', 'stapler', 'mop', 'lamp', 'mone
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
   // всегда с собой: вплотную, сильный урон, кровотечение 10 с, двойной урон в спину
   cutter: {
-    id: 'cutter', name: 'Канцелярский нож', type: 'melee',
+    id: 'cutter', name: 'Резак', type: 'melee',
     range: 1.0, damage: 22, cooldown: 0.4, windup: 0.08, arc: 80, backstabMultiplier: 2,
     effects: [{ kind: 'bleed', seconds: 10, dps: 2 }],
     clip: '1H_Melee_Attack_Stab', animSpeed: 1.8,
