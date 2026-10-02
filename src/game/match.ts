@@ -638,7 +638,8 @@ export class Match {
     const heavy = w === 'lamp' ? 1.8 : w === 'moneygun' ? 0.5 : 1
     this.fx.hit(v.body.x, 1.2, v.body.z, dx, dz, heavy * (k === 2 ? 1.8 : 1))
     v.avatar.flash()
-    sfx.play(HIT_SOUND[w], v.body.x, v.body.z)
+    // детский режим: без «мокрых» звуков — просто глухой шлепок
+    sfx.play(this.fx.gore ? HIT_SOUND[w] : 'hitBroom', v.body.x, v.body.z)
     if (w === 'lamp' || k === 2) v.avatar.action('Hit_A', 1.6)
     const txt = k === 2 ? `В спину! ${n}` : String(n)
     this.fx.floatText(txt, v.body.x + (Math.random() - 0.5) * 0.4, 2.3, v.body.z, k === 2 ? '#d3122a' : '#7c5a8c')
@@ -676,7 +677,7 @@ export class Match {
     // убийце — очко (у себя считаем сразу, остальным он сам разошлёт счёт)
     const killer = this.fighters.get(byId) ?? null
     if (killer && killer !== v) killer.kills++
-    sfx.play('death', v.body.x, v.body.z)
+    sfx.play(gore ? 'death' : 'party', v.body.x, v.body.z)
     if (killer && killer.kind === 'local' && killer !== v) setTimeout(() => sfx.play('kill'), 250)
     this.hooks.onKill(killer && killer !== v ? killer : null, v, w)
   }

@@ -530,3 +530,12 @@ html, body {
 }
 /* на широком экране меню прижато к левому краю */
 @media (min-width: 900px) { #menu > .card { justify-self: start; } }
+
+/* Мой возраст */
+.age { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 13px; color: var(--muted); }
+.age label { display: inline-flex; align-items: center; gap: 6px; color: var(--text); cursor: pointer; white-space: nowrap; }
+.age input { accent-color: #6a4fb0; width: 16px; height: 16px; margin: 0; }
+@media (max-height: 560px) { #menu .age { grid-column: 1; font-size: 12px; } }
+.age.need { color: #d6455a; animation: shake .3s; }
+@keyframes shake { 25% { transform: translateX(-4px) } 75% { transform: translateX(4px) } }
+.age > span { flex-basis: 100%; }

@@ -6,7 +6,7 @@
 export type SoundName =
   | 'swing' | 'swingHeavy' | 'staple' | 'money'
   | 'hitCut' | 'hitStaple' | 'hitBroom' | 'hitLamp' | 'hitMoney'
-  | 'death' | 'headBounce' | 'dodge' | 'pickup' | 'coffee' | 'respawn' | 'kill' | 'win' | 'empty'
+  | 'death' | 'headBounce' | 'dodge' | 'pickup' | 'coffee' | 'respawn' | 'kill' | 'win' | 'empty' | 'party'
 
 class Sfx {
   private ctx: AudioContext | null = null
@@ -134,6 +134,11 @@ class Sfx {
         this.thud(out, t + 0.05, 1.1, 70)
         this.tone(out, t + 0.02, 0.09, 'sine', 900, 300, 0.25) // «чпок» — голова
         this.gurgle(out, t + 0.12, 1.3)
+        break
+      case 'party': // хлопушка с конфетти — вместо смерти в детском режиме
+        this.noise(out, t, 0.08, 'highpass', 1200, 0.6)
+        this.thud(out, t, 0.6, 220)
+        ;[1568, 2093, 2637].forEach((f, i) => this.bell(out, t + 0.05 + i * 0.07, f, 0.18))
         break
       case 'headBounce': this.thud(out, t, 0.35, 180); break
       case 'dodge': this.whoosh(out, t, 0.22, 2000, 0.3); break

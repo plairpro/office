@@ -29,6 +29,11 @@
         </label>
         <div class="field"><span>Кем будешь драться?</span></div>
         <div id="chars" class="chars"></div>
+        <div class="age" role="radiogroup" aria-label="Мой возраст">
+          <span>Мой возраст:</span>
+          <label><input type="radio" name="age" value="kid" /> Младше 12 лет</label>
+          <label><input type="radio" name="age" value="adult" /> Старше 12 лет</label>
+        </div>
         <button id="btn-main" class="btn cta">Создать офис</button>
         <div id="join-row" class="join-row">
           <input id="join-code" maxlength="6" autocomplete="off" spellcheck="false" placeholder="Код офиса" />
@@ -70,10 +75,6 @@
       <div id="win" hidden><div class="win-card"><small>Сотрудник месяца</small><b id="win-name"></b><span id="win-sub"></span><small>Новый раунд через несколько секунд</small></div></div>
       <div class="panel fps"><span id="build" title="Версия игры"></span><span id="netdiag" title="Связь"></span><span id="fps"></span>
         <button id="btn-mute" class="mute" title="Звук">🔊</button>
-        <select id="gore" title="Кровь">
-          <option value="on">Кровь</option>
-          <option value="off">Конфетти</option>
-        </select>
         <select id="quality" title="Графика">
           <option value="low">Низкая</option>
           <option value="medium">Средняя</option>
