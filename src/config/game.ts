@@ -41,22 +41,28 @@ export interface CharacterDef {
   knockbackResist: number // 0 — отлетает полностью, 1 — не отлетает
 }
 
+// Баланс: у каждого одна сильная сторона и одна слабая. «Сила» ≈ живучесть × скорость атаки ≈ 110 у всех,
+// а дальше решают скорость бега, уклон, размер и отбрасывание.
 export const CHARACTERS: Record<CharacterId, CharacterDef> = {
+  // уклонист: мало здоровья, но каждый пятый удар мимо (живучесть ≈ 100)
   accountant: {
-    id: 'accountant', name: 'Бухгалтер', blurb: 'Хрупкий, но вёрткий. Видел всё.',
-    hp: 80, moveMul: 1.03, attackSpeedMul: 1.3, dodge: 0.15, radius: 0.38, knockbackResist: 0,
+    id: 'accountant', name: 'Бухгалтер', blurb: 'Хрупкий, но вёрткий: каждый пятый удар мимо.',
+    hp: 80, moveMul: 1.05, attackSpeedMul: 1.1, dodge: 0.2, radius: 0.38, knockbackResist: 0,
   },
+  // танк: больше всех здоровья, почти не отлетает, но медленный и крупный
   boss: {
     id: 'boss', name: 'Босс', blurb: 'Самый живучий и почти не отлетает от ударов, но медленный.',
-    hp: 120, moveMul: 0.92, attackSpeedMul: 0.8, dodge: 0, radius: 0.52, knockbackResist: 0.7,
+    hp: 130, moveMul: 0.92, attackSpeedMul: 0.85, dodge: 0, radius: 0.48, knockbackResist: 0.7,
   },
+  // стеклянная пушка: бьёт быстрее всех, но здоровья меньше всех
   secretary: {
-    id: 'secretary', name: 'Секретарь', blurb: 'Печатает 300 знаков в минуту. И бьёт так же.',
-    hp: 90, moveMul: 1.04, attackSpeedMul: 1.5, dodge: 0, radius: 0.38, knockbackResist: 0,
+    id: 'secretary', name: 'Секретарь', blurb: 'Печатает 300 знаков в минуту. И бьёт так же — но хрупкий.',
+    hp: 75, moveMul: 1.0, attackSpeedMul: 1.45, dodge: 0, radius: 0.4, knockbackResist: 0,
   },
+  // бегун: быстрее всех, первым добегает до оружия и кофе; в драке обычный
   courier: {
-    id: 'courier', name: 'Курьер', blurb: 'Доставка за 30 секунд или пицца бесплатно.',
-    hp: 95, moveMul: 1.12, attackSpeedMul: 1.1, dodge: 0, radius: 0.42, knockbackResist: 0,
+    id: 'courier', name: 'Курьер', blurb: 'Быстрее всех добегает до оружия и кофе.',
+    hp: 95, moveMul: 1.15, attackSpeedMul: 1.0, dodge: 0, radius: 0.42, knockbackResist: 0,
   },
 }
 
