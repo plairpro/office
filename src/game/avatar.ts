@@ -440,7 +440,7 @@ export class Avatar {
     this.root.add(this.ring)
 
     this.label = makeLabel(name, color)
-    this.label.position.y = this.height + 0.45
+    this.label.position.y = this.height + 0.7
     this.root.add(this.label)
 
     // полоска здоровья над головой
@@ -585,7 +585,7 @@ export class Avatar {
     ;(this.label.material as THREE.SpriteMaterial).map?.dispose()
     this.label.material.dispose()
     this.label = makeLabel(name, color)
-    this.label.position.y = this.height + 0.45
+    this.label.position.y = this.height + 0.7
     this.root.add(this.label)
   }
 
@@ -630,26 +630,31 @@ export class Avatar {
 }
 
 function makeLabel(text: string, color: number): THREE.Sprite {
+  // без плашки: тонкий белый текст с мягкой тенью и цветная точка игрока с отступом
+  const S = 2 // запас по разрешению — чтобы тонкий шрифт не мылился
   const canvas = document.createElement('canvas')
-  canvas.width = 256
-  canvas.height = 64
+  canvas.width = 256 * S
+  canvas.height = 48 * S
   const ctx = canvas.getContext('2d')!
-  ctx.font = 'bold 30px system-ui, -apple-system, Segoe UI, sans-serif'
-  const w = Math.min(ctx.measureText(text).width + 28, 250)
-  ctx.fillStyle = 'rgba(255,250,246,0.92)'
-  ctx.beginPath()
-  ctx.roundRect((256 - w) / 2, 10, w, 44, 12)
-  ctx.fill()
+  ctx.scale(S, S)
+  ctx.font = '500 22px system-ui, -apple-system, "Segoe UI", sans-serif'
+  const tw = Math.min(ctx.measureText(text).width, 200)
+  const dot = 7, gap = 9
+  const x0 = (256 - (tw + dot * 2 + gap)) / 2
+  ctx.shadowColor = 'rgba(40, 34, 70, 0.55)'
+  ctx.shadowBlur = 5
   ctx.fillStyle = '#' + color.toString(16).padStart(6, '0')
-  ctx.fillRect((256 - w) / 2 + 10, 28, 8, 8)
-  ctx.fillStyle = '#3d3557'
-  ctx.textAlign = 'center'
+  ctx.beginPath()
+  ctx.arc(x0 + dot, 24, dot - 1, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.96)'
+  ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
-  ctx.fillText(text, 128 + 6, 33, 220)
+  ctx.fillText(text, x0 + dot * 2 + gap, 25, 200)
   const tex = new THREE.CanvasTexture(canvas)
   tex.colorSpace = THREE.SRGBColorSpace
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }))
-  sprite.scale.set(2.2, 0.55, 1)
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, opacity: 0.9 }))
+  sprite.scale.set(1.9, 0.36, 1)
   sprite.renderOrder = 10
   return sprite
 }
