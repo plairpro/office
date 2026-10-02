@@ -465,3 +465,7 @@ html, body {
 /* Здоровье в углу — полупрозрачное */
 .hp { background: rgba(255, 255, 255, 0.4); border-radius: 999px; }
 #hp-fill { background: linear-gradient(90deg, rgba(211, 18, 42, 0.72), rgba(233, 64, 90, 0.72)); border-radius: 999px; }
+
+/* «Позвать коллег» — изумрудная, полупрозрачная */
+.btn.primary.invite { background: rgba(18, 160, 118, 0.72); box-shadow: 0 3px 0 rgba(10, 100, 72, 0.6); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+.btn.primary.invite:hover { background: rgba(18, 160, 118, 0.88); }

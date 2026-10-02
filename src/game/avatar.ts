@@ -4,6 +4,7 @@ import type { AABB } from '../scene/builder'
 import { GAME, CHARACTERS, type CharacterId } from '../config/game'
 import { getAssets, type BaseChar } from '../assets'
 import { weaponMesh } from './weapons3d'
+import { meshComponents, removeComponents, type Component } from './parts'
 import type { WeaponId } from '../config/game'
 
 // ======================================================================
@@ -24,12 +25,64 @@ type Part = 'Body' | 'Arm' | 'Leg'
  * Цвет игрока на одежду не идёт — он только на аксессуарах (галстук, кепка, бейдж) и на подписи.
  */
 type Paint = (part: Part, h: number, side: number) => number
-type Look = { base: BaseChar; paint: Paint; head?: Rule[]; accessories: (rig: Rig, color: number) => void }
+type Look = { base: BaseChar; paint: Paint; head?: Rule[]; force?: Partial<Record<Part, Record<string, number>>>; accessories: (rig: Rig, color: number) => void }
 
 const SKIN = 0xf5c4a0
 const HIPS = 0.26 // ниже — брюки или юбка
 const SHOES = 0.095 // ниже — обувь
 const HANDS = 0.8 // дальше от оси — кисти
+
+/**
+ * Остатки фэнтези-снаряжения, которые надо вырезать из геометрии: ремни, пряжки, гербы, сумки, фляги, наплечники.
+ * Задаются ячейками атласа (x,y в сетке 16×16) для части тела; small — убрать мелкие отдельные куски (пряжки, серьги).
+ */
+const STRIP: Record<BaseChar, Partial<Record<'Body' | 'Arm' | 'Head', { cells?: string[]; small?: number }>>> = {
+  knight: {
+    Body: { cells: ['0,4', '1,4', '0,5', '1,5', '0,6', '1,6', '0,7', '1,7', '2,5', '2,6', '2,7', '3,4', '3,5', '3,6', '3,7'], small: 200 },
+    Arm: { cells: ['14,0', '14,1', '15,0', '15,1'] },
+  },
+  barbarian: {
+    Body: { cells: ['6,1', '7,1', '6,2', '7,2', '6,3', '7,3'], small: 200 },
+  },
+  mage: {
+    Body: { cells: ['4,8', '4,9', '4,10', '4,11', '0,9', '0,10', '0,11'], small: 200 },
+  },
+  rogue: {
+    Body: { cells: ['10,1', '11,1', '10,2', '11,2', '12,0', '12,1', '13,1', '12,2', '13,2', '12,3', '13,3', '6,0', '7,0', '6,1', '7,1', '6,2', '7,2'], small: 200 },
+    Head: { small: 30 },
+  },
+}
+
+/** Вырезает снаряжение из геометрии базовой модели (один раз: геометрия общая у всех копий) */
+function stripGear(base: BaseChar, model: THREE.Object3D): void {
+  const rules = STRIP[base]
+  model.traverse((o) => {
+    if (!(o instanceof THREE.SkinnedMesh) || o.geometry.userData.stripped) return
+    o.geometry.userData.stripped = true
+    const part = /Arm/.test(o.name) ? 'Arm' : /Head/.test(o.name) ? 'Head' : /Leg/.test(o.name) ? null : 'Body'
+    const rule = part ? rules[part] : undefined
+    if (!rule) return
+    const g = o.geometry, idx = g.index, uv = g.attributes.uv
+    if (!idx) return
+    if (rule.cells) {
+      const cells = new Set(rule.cells)
+      for (let t = 0; t < idx.count / 3; t++) {
+        let cx = 0, cy = 0
+        for (let k = 0; k < 3; k++) { const i = idx.getX(t * 3 + k); cx += uv.getX(i); cy += uv.getY(i) }
+        if (cells.has(`${Math.floor(cx / 3 * 16)},${Math.floor(cy / 3 * 16)}`)) {
+          const a = idx.getX(t * 3); idx.setX(t * 3 + 1, a); idx.setX(t * 3 + 2, a)
+        }
+      }
+      idx.needsUpdate = true
+    }
+    if (rule.small) {
+      const comps = meshComponents(o)
+      const drop: Component[] = comps.slice(1).filter((c) => c.tris.length < rule.small!)
+      // у головы мелкие куски — это глаза, брови, уши; режем только то, что далеко сбоку (серьги)
+      removeComponents(o, part === 'Head' ? drop.filter((c) => Math.min(Math.abs(c.min.x), Math.abs(c.max.x)) > 0.42) : drop)
+    }
+  })
+}
 
 const LOOKS: Record<CharacterId, Look> = {
   // Курьер ← рыцарь: куртка доставки, джинсы, белые кроссовки, кепка цвета игрока, коробка пиццы
@@ -48,6 +101,8 @@ const LOOKS: Record<CharacterId, Look> = {
       p === 'Arm' ? (side > HANDS ? SKIN : 0xfbfaf6)
         : p === 'Leg' ? (h < SHOES ? 0x7a4d30 : 0xd8c3a0)
           : h < HIPS ? 0xd8c3a0 : 0xfbfaf6,
+    // меховая юбка и пряжка варвара — в цвет рубашки: выглядит как рубашка навыпуск
+    force: { Body: Object.fromEntries(['4,5', '4,6', '4,7', '5,5', '5,6', '5,7', '12,3', '13,1', '13,2', '13,3', '4,4', '14,6', '15,6', '12,1', '12,0'].map((c) => [c, 0xfbfaf6])) },
     accessories: (rig, color) => tie(rig, color),
   },
   // Бухгалтерша ← маг: седое каре, серо-сиреневый кардиган, коричневая юбка, телесные колготки, огромные очки
@@ -58,6 +113,8 @@ const LOOKS: Record<CharacterId, Look> = {
         : p === 'Leg' ? (h < SHOES ? 0x4b3e48 : h > 0.17 ? 0x6e5257 : 0xe2c2a8)
           : h < HIPS ? 0x6e5257 : 0x9c93b8,
     head: [[2, 0, 3, 2, 0xdcdae6]],
+    // пояс мага — в цвет кардигана (вырезать нельзя: под ним дыра)
+    force: { Body: Object.fromEntries(['10,0', '11,0', '10,1', '11,1', '10,2', '11,2', '10,3', '11,3'].map((c) => [c, 0x9c93b8])) },
     accessories: (rig, color) => { glasses(rig); badge(rig, color) },
   },
   // Секретарша ← разбойница: белая блузка, тёмная юбка-карандаш, колготки, чёрные туфли
@@ -128,7 +185,7 @@ function outfitRules(look: Look, model: THREE.Object3D, part: Part, src: THREE.T
     if (x < 0 || y < 0 || x > 15 || y > 15) continue
     const i = (y * 16 + x) * 4
     if (isSkin(px[i], px[i + 1], px[i + 2])) continue
-    rules.push([x, y, x, y, look.paint(part, st.h, st.side)])
+    rules.push([x, y, x, y, look.force?.[part]?.[k] ?? look.paint(part, st.h, st.side)])
   }
   return rules
 }
@@ -261,14 +318,30 @@ function tie(rig: Rig, color: number): void {
   const h = (b.max.y - b.min.y) * 0.5
   const g = new THREE.Group()
   const m = mat(color, rig)
-  const knot = new THREE.Mesh(geo(new THREE.BoxGeometry(h * 0.18, h * 0.14, h * 0.08), rig), m)
-  const blade = new THREE.Mesh(geo(new THREE.CylinderGeometry(h * 0.12, h * 0.04, h * 0.75, 4), rig), m)
-  blade.rotation.y = Math.PI / 4
-  blade.scale.z = 0.35
-  blade.position.y = -h * 0.42
+  const flat = (pts: [number, number][], depth: number) => {
+    const sh = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x * h, y * h)))
+    const ge = geo(new THREE.ExtrudeGeometry(sh, { depth: depth * h, bevelEnabled: true, bevelSize: 0.008 * h, bevelThickness: 0.008 * h, bevelSegments: 1 }), rig)
+    ge.translate(0, 0, -depth * h / 2)
+    return new THREE.Mesh(ge, m)
+  }
+  // узел — трапеция, лопасть — расширяется книзу и заканчивается острым мысом
+  const knot = flat([[-0.09, 0.06], [0.09, 0.06], [0.055, -0.07], [-0.055, -0.07]], 0.07)
+  const blade = flat([[-0.05, -0.06], [0.05, -0.06], [0.13, -0.62], [0, -0.76], [-0.13, -0.62]], 0.03)
+  blade.rotation.x = -0.12 // ложится на живот
+  // уголки воротника рубашки
+  const white = mat(0xfbfaf6, rig)
+  for (const sx of [-1, 1]) {
+    const c = new THREE.Mesh(geo(new THREE.ExtrudeGeometry(new THREE.Shape([
+      new THREE.Vector2(0, 0.08 * h), new THREE.Vector2(sx * 0.2 * h, 0.06 * h), new THREE.Vector2(sx * 0.06 * h, -0.1 * h)]),
+    { depth: 0.02 * h, bevelEnabled: false }), rig), white)
+    c.position.set(sx * 0.03 * h, 0, 0.02 * h)
+    c.rotation.x = -0.25
+    c.userData.keep = true // воротник не перекрашивается в цвет игрока
+    g.add(c)
+  }
   g.add(knot, blade)
   g.name = 'tie'
-  rig.attach('chest', g, new THREE.Vector3(0, b.max.y - h * 0.3, b.max.z + 0.01))
+  rig.attach('chest', g, new THREE.Vector3(0, b.max.y - h * 0.22, b.max.z + 0.01))
 }
 
 /** Офисный бейдж на шнурке цвета игрока — чтобы в драке отличать своих от чужих */
@@ -284,8 +357,9 @@ function badge(rig: Rig, color: number): void {
   photo.userData.keep = true
   for (const sx of [-1, 1]) {
     const cord = new THREE.Mesh(geo(new THREE.BoxGeometry(h * 0.03, h * 0.5, h * 0.02), rig), m)
-    cord.position.set(sx * h * 0.12, -h * 0.05, -h * 0.01)
-    cord.rotation.z = sx * 0.35
+    // от уголков бейджа вверх и в стороны — к шее
+    cord.position.set(sx * h * 0.2, -h * 0.05, -h * 0.01)
+    cord.rotation.z = -sx * 0.4
     g.add(cord)
   }
   g.add(card, photo)
@@ -336,6 +410,7 @@ export class Avatar {
   constructor(name: string, private color: number, readonly character: CharacterId, _look = 0) {
     const look = LOOKS[character]
     const a = getAssets()
+    stripGear(look.base, a.chars[look.base].scene)
     this.model = SkeletonUtils.clone(a.chars[look.base].scene)
 
     // перекраска по группам мешей
