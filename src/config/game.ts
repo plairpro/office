@@ -126,7 +126,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   // ближний бой 2 м: слабый урон, широкий размах, замедляет на 5 с и отталкивает
   mop: {
     id: 'mop', name: 'Швабра', type: 'melee',
-    range: 2.0, damage: 7, cooldown: 0.75, windup: 0.18, arc: 150,
+    range: 2.0, damage: 14, cooldown: 0.75, windup: 0.18, arc: 150,
     effects: [{ kind: 'slow', seconds: 5, factor: 0.55 }, { kind: 'knockback', force: 9 }],
     clip: '2H_Melee_Attack_Slice', animSpeed: 1.5,
   },
