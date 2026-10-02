@@ -327,6 +327,7 @@ export class Avatar {
   private oneShot: THREE.AnimationAction | null = null
   private deathAction: THREE.AnimationAction | null = null
   dead = false
+  private headless = false
   readonly skin = SKIN
   headSize = 0.4
   private hpBg: THREE.Sprite
@@ -546,6 +547,7 @@ export class Avatar {
     const p = new THREE.Vector3()
     this.head.getWorldPosition(p)
     this.head.scale.setScalar(0.001) // вместе с головой исчезают очки, кепка, причёска
+    this.headless = true
     return p
   }
 
@@ -561,6 +563,7 @@ export class Avatar {
     this.dead = false
     this.deathAction?.stop()
     this.deathAction = null
+    this.headless = false
     this.head?.scale.setScalar(1)
     this.ring.visible = true
     this.model.visible = true
@@ -596,7 +599,12 @@ export class Avatar {
       const f = (this.flashT / 0.18) * 0.9
       for (const m of this.mats) m.emissive.copy(this.flashColor).multiplyScalar(f)
     }
-    if (this.dead) { this.mixer.update(dt); return }
+    if (this.dead) {
+      this.mixer.update(dt)
+      // анимация смерти каждый кадр возвращает кости масштаб 1 — голову прячем после неё
+      if (this.headless) this.head?.scale.setScalar(0.001)
+      return
+    }
     this.model.rotation.y = facing
     const k = speed / GAME.player.speed
     if (this.oneShot) { /* удар/выстрел доигрывает поверх */ }
