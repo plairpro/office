@@ -22,7 +22,7 @@ type Paint = Record<string, number | 'P'>
 type Look = { paint: Paint; shoes: number; accessories: (rig: Rig, color: number) => void }
 
 const LOOKS: Record<CharacterId, Look> = {
-  // Курьер: оранжевая футболка доставки, джинсы, кепка цвета игрока
+  // Стажёр: оранжевая футболка, джинсы, кепка цвета игрока
   courier: {
     paint: { Shirt: 0xf2a03f, Pants: 0x5f7fae, Belt: 0x4b392d, Hair: 0x5a3a22, Skin: SKIN, Face: EYES },
     shoes: 0xf4f3f7,

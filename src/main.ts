@@ -360,7 +360,7 @@ async function startGame(code: string | null): Promise<void> {
   }
   $('menu-error').hidden = true
   document.querySelector('.age')?.classList.remove('need')
-  myName = nameInput.value.trim().slice(0, 16) || 'Стажёр'
+  myName = nameInput.value.trim().slice(0, 16) || 'Коллега'
   saveName(myName)
   setPreview(null)
   camera.clearViewOffset()

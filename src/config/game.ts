@@ -61,7 +61,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   },
   // бегун: быстрее всех, первым добегает до оружия и кофе; в драке обычный
   courier: {
-    id: 'courier', name: 'Курьер', blurb: 'Быстрее всех добегает до оружия и кофе.',
+    id: 'courier', name: 'Стажёр', blurb: 'Бегает по поручениям — быстрее всех добегает до оружия и кофе.',
     hp: 95, moveMul: 1.15, attackSpeedMul: 1.0, dodge: 0, radius: 0.42, knockbackResist: 0,
   },
 }
