@@ -109,39 +109,39 @@ export interface WeaponDef {
 export const WEAPON_IDS: WeaponId[] = ['cutter', 'stapler', 'mop', 'lamp', 'moneygun']
 
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
-  // всегда с собой: быстрый, кровотечение, двойной урон в спину
+  // всегда с собой: вплотную, сильный урон, кровотечение 10 с, двойной урон в спину
   cutter: {
     id: 'cutter', name: 'Канцелярский нож', type: 'melee',
-    range: 1.25, damage: 16, cooldown: 0.38, windup: 0.08, arc: 80, backstabMultiplier: 2,
+    range: 1.0, damage: 22, cooldown: 0.4, windup: 0.08, arc: 80, backstabMultiplier: 2,
     effects: [{ kind: 'bleed', seconds: 10, dps: 2 }],
     clip: '1H_Melee_Attack_Stab', animSpeed: 1.8,
   },
-  // основной «ствол»: очередь скобок, магазин 12
+  // дальний бой 10 м: очередь скоб, средний урон, кровотечение 5 с, магазин 12
   stapler: {
     id: 'stapler', name: 'Степлер', type: 'ranged',
-    range: 10, damage: 11, cooldown: 0.24, windup: 0, spread: 5, speed: 24, ammo: 12,
+    range: 10, damage: 12, cooldown: 0.24, windup: 0, spread: 5, speed: 24, ammo: 12,
     effects: [{ kind: 'bleed', seconds: 5, dps: 1.5 }],
     clip: '1H_Ranged_Shoot', animSpeed: 2.2,
   },
-  // контроль: широкий размах, отталкивает и замедляет
+  // ближний бой 2 м: слабый урон, широкий размах, замедляет на 5 с и отталкивает
   mop: {
     id: 'mop', name: 'Швабра', type: 'melee',
-    range: 2.3, damage: 12, cooldown: 0.75, windup: 0.18, arc: 150,
-    effects: [{ kind: 'slow', seconds: 4, factor: 0.6 }, { kind: 'knockback', force: 9 }],
+    range: 2.0, damage: 7, cooldown: 0.75, windup: 0.18, arc: 150,
+    effects: [{ kind: 'slow', seconds: 5, factor: 0.55 }, { kind: 'knockback', force: 9 }],
     clip: '2H_Melee_Attack_Slice', animSpeed: 1.5,
   },
-  // тяжёлый удар: долгий замах, который видно заранее, короткий стан
+  // вплотную (1 м): сильный удар с заметным замахом, оглушает на 2 с
   lamp: {
     id: 'lamp', name: 'Настольная лампа', type: 'melee',
-    range: 1.45, damage: 38, cooldown: 1.1, windup: 0.42, arc: 100,
-    effects: [{ kind: 'stun', seconds: 0.7 }],
+    range: 1.0, damage: 36, cooldown: 1.2, windup: 0.42, arc: 100,
+    effects: [{ kind: 'stun', seconds: 2 }],
     clip: '2H_Melee_Attack_Chop', animSpeed: 1.3,
   },
-  // «дробовик»: веер купюр, короткое обезоруживание
+  // 5 м: веер купюр почти без урона — главное, выбивает оружие из рук на 2 с
   moneygun: {
     id: 'moneygun', name: 'Деньгомёт', type: 'ranged',
-    range: 5.5, damage: 6, cooldown: 0.9, windup: 0, pellets: 7, spread: 32, speed: 15, ammo: 6,
-    effects: [{ kind: 'disarm', seconds: 1.2 }],
+    range: 5, damage: 2, cooldown: 0.9, windup: 0, pellets: 7, spread: 32, speed: 15, ammo: 6,
+    effects: [{ kind: 'disarm', seconds: 2 }],
     clip: '1H_Ranged_Shoot', animSpeed: 1.6,
   },
 }

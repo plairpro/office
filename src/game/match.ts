@@ -516,7 +516,9 @@ export class Match {
       else if (e.kind === 'slow') { v.slow = e.seconds; v.slowFactor = e.factor }
       else if (e.kind === 'stun') v.stun = e.seconds
       else if (e.kind === 'disarm') {
-        if (v.disarm <= 0 && v.kind === 'local') this.fx.floatText('Обезоружен!', v.body.x, 2.5, v.body.z, '#9d8fd0')
+        // выбивает оружие из рук: подобранное теряется, и пару секунд нельзя бить даже ножом
+        if (v.disarm <= 0) this.fx.floatText(v.weapon !== 'cutter' ? 'Выронил оружие!' : 'Обезоружен!', v.body.x, 2.5, v.body.z, '#9d8fd0')
+        if (v.weapon !== 'cutter') this.equip(v, 'cutter')
         v.disarm = e.seconds
       } else if (e.kind === 'knockback') {
         const k = e.force * (1 - ch.knockbackResist)
