@@ -544,7 +544,8 @@ export class Match {
     if (d > w.range + r + 0.15) return null // +0.15 — небольшой запас на задержку сети
     const ang = Math.atan2(dx, dz)
     const diff = Math.abs(wrap(ang - a))
-    if (d > r + 0.35 && diff > ((w.arc ?? 90) / 2) * DEG + Math.atan2(r, d)) return null
+    // вплотную (тела касаются) — попадает в любом направлении; иначе только в конус удара
+    if (d > r + 0.1 && diff > ((w.arc ?? 90) / 2) * DEG + Math.atan2(r, d)) return null
     if (!this.los(ax, az, v.body.x, v.body.z)) return null
     const nx = d > 1e-3 ? dx / d : Math.sin(a), nz = d > 1e-3 ? dz / d : Math.cos(a)
     // удар в спину: жертва смотрит туда же, куда летит удар

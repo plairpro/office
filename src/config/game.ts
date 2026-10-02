@@ -116,32 +116,37 @@ export interface WeaponDef {
 export const WEAPON_IDS: WeaponId[] = ['cutter', 'stapler', 'mop', 'lamp', 'moneygun']
 
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
-  // всегда с собой: вплотную, сильный урон, кровотечение 10 с, двойной урон в спину
+  // Баланс оружия: чем дальше бьёт и чем сильнее эффект — тем меньше урона в секунду и тем быстрее кончается.
+  // Урон/с (без эффектов): резак 45 · степлер 27 · швабра 19 · деньгомёт 16 · лампа 4.
+  // Конус: чем мощнее удар, тем точнее надо целиться — резак 70°, лампа 90°, швабра размашистая 140°;
+  // у стрелкового — разброс: степлер почти точный (4°), деньгомёт веером (30°, на 5 м — полоса ≈2.7 м).
+
+  // всегда с собой, бесконечный: вплотную, самый большой урон, кровотечение 6 с, двойной урон в спину
   cutter: {
     id: 'cutter', name: 'Резак', type: 'melee',
-    range: 0.45, damage: 22, cooldown: 0.4, windup: 0.08, arc: 80, backstabMultiplier: 2,
-    effects: [{ kind: 'bleed', seconds: 10, dps: 2 }],
+    range: 0.45, damage: 18, cooldown: 0.4, windup: 0.08, arc: 70, backstabMultiplier: 2,
+    effects: [{ kind: 'bleed', seconds: 6, dps: 2 }],
     clip: 'SwordSlash', animSpeed: 2.6,
   },
-  // дальний бой 10 м: очередь скоб, средний урон, кровотечение 5 с, магазин 12
+  // дальний бой 10 м: очередь скоб, слабее резака, кровотечение 3 с, магазин 12 (≈100 урона на весь)
   stapler: {
     id: 'stapler', name: 'Степлер', type: 'ranged',
-    range: 10, damage: 12, cooldown: 0.24, windup: 0, spread: 5, speed: 24, ammo: 12,
-    effects: [{ kind: 'bleed', seconds: 5, dps: 1.5 }],
-    clip: 'Shoot_OneHanded', animSpeed: 2.2,
+    range: 10, damage: 8, cooldown: 0.3, windup: 0, spread: 4, speed: 24, ammo: 12,
+    effects: [{ kind: 'bleed', seconds: 3, dps: 1.5 }],
+    clip: 'Shoot_OneHanded', animSpeed: 1.8,
   },
-  // ближний бой 2 м: слабый урон, широкий размах, замедляет на 5 с и отталкивает
+  // 2 м: средний урон, широкий размах, замедляет на 3 с и отталкивает; 5 попаданий
   mop: {
     id: 'mop', name: 'Швабра', type: 'melee',
-    range: 2.0, damage: 14, cooldown: 0.75, windup: 0.18, arc: 150,
-    effects: [{ kind: 'slow', seconds: 5, factor: 0.55 }, { kind: 'knockback', force: 9 }],
+    range: 2.0, damage: 14, cooldown: 0.75, windup: 0.18, arc: 140,
+    effects: [{ kind: 'slow', seconds: 3, factor: 0.6 }, { kind: 'knockback', force: 9 }],
     durability: 5,
     clip: 'SwordSlash', animSpeed: 1.5,
   },
-  // вплотную (1 м): сильный удар с заметным замахом, оглушает на 2 с
+  // 1 м: почти без урона, медленная, оглушает на 2 с; 3 попадания
   lamp: {
     id: 'lamp', name: 'Настольная лампа', type: 'melee',
-    range: 1.0, damage: 5, cooldown: 1.2, windup: 0.42, arc: 100,
+    range: 1.0, damage: 5, cooldown: 1.2, windup: 0.42, arc: 90,
     effects: [{ kind: 'stun', seconds: 2 }],
     durability: 3,
     clip: 'SwordSlash', animSpeed: 0.95,
@@ -149,7 +154,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   // 5 м: веер купюр почти без урона — главное, выбивает оружие из рук на 2 с
   moneygun: {
     id: 'moneygun', name: 'Деньгомёт', type: 'ranged',
-    range: 5, damage: 2, cooldown: 0.9, windup: 0, pellets: 7, spread: 32, speed: 15, ammo: 6,
+    range: 5, damage: 2, cooldown: 0.9, windup: 0, pellets: 7, spread: 30, speed: 15, ammo: 6,
     effects: [{ kind: 'disarm', seconds: 2 }],
     clip: 'Shoot_OneHanded', animSpeed: 0.9,
   },

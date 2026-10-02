@@ -176,10 +176,11 @@ export function buildOffice(): Office {
   for (const x of [-2.6, 1.8, 6.2]) desk(b, p, x, -11.4, 0)
   for (const x of [-0.4, 4]) acoustic(b, x, -11.3, 2.6, Math.PI / 2)
 
-  // ---------- рабочая зона «Запад» и лестница в никуда ----------
+  // ---------- рабочая зона «Запад» ----------
   desk(b, p, -11.2, 0.4, Math.PI / 2)
   acoustic(b, -11.2, -1.7, 2.6, 0)
-  impossibleStairs(b, -W + 0.25, -2.4)
+  // вдоль стены — шкафы с документами (вместо лестницы в никуда)
+  for (const z of [-3.2, -4.4, -5.6]) cabinet(b, -W + 0.55, z, Math.PI / 2)
 
   // ---------- ЮЗ: туалеты ----------
   restrooms(b, -W + 0.2, -9.4, 8.9, D - 0.2)
@@ -423,19 +424,6 @@ function slide(p: Placer, x: number, y: number, z: number, w: number, h: number)
 // ======================= архитектура в духе Monument Valley =======================
 
 /** Лестница, которая поднимается вдоль западной стены и уходит в неё */
-function impossibleStairs(b: StaticBuilder, x: number, z: number): void {
-  const n = 9
-  for (let i = 0; i < n; i++) {
-    const h = 0.32 * (i + 1)
-    const sz = z - i * 0.55
-    b.box(1.3, h, 0.55, x + 0.65, 0, sz, 'paint', i % 2 ? C.step : C.stepSide)
-    b.box(1.3, 0.04, 0.55, x + 0.65, h, sz, 'paint', C.pillar)
-  }
-  // дверь в стене наверху — никуда
-  b.rbox(0.1, 1.6, 0.9, 0.04, x + 0.02, 0.32 * n, z - (n - 1) * 0.55, 'paint', MV.indigo)
-  b.rbox(0.12, 0.08, 0.08, 0.03, x + 0.1, 0.32 * n + 0.8, z - (n - 1) * 0.55 + 0.25, 'plastic', MV.mustard)
-  b.blocker(x + 0.65, z - (n - 1) * 0.275, 1.3, n * 0.55)
-}
 
 function pingPong(b: StaticBuilder, x: number, z: number, rot: number): void {
   const L = 2.74, Wd = 1.52
@@ -449,7 +437,11 @@ function pingPong(b: StaticBuilder, x: number, z: number, rot: number): void {
     b.box(0.06, 0.72, 0.06, x + lx * c + lz * s, 0, z - lx * s + lz * c, 'paint', MV.indigo)
   }
   b.sphere(0.03, x + 0.3, 0.8, z + 0.5, 'paint', MV.mustard)
-  b.rbox(0.16, 0.02, 0.26, 0.01, x - 0.4, 0.75, z - 0.6, 'paint', MV.coral, { rotY: 0.6 })
+  // две ракетки: бежевая ручка и красный круг
+  for (const [px, pz, a] of [[x - 0.55, z - 0.35, 0.6], [x + 0.7, z + 0.4, -2.3]] as const) {
+    b.cylinder(0.075, 0.075, 0.012, px, 0.77, pz, 'plastic', 0xd6323f, { segments: 20 })
+    b.box(0.03, 0.02, 0.12, px + Math.sin(a) * 0.12, 0.775, pz + Math.cos(a) * 0.12, 'wood', 0xf2dcb8, { rotY: a })
+  }
 }
 
 function globe(b: StaticBuilder, x: number, z: number): void {
@@ -785,6 +777,4 @@ function details(b: StaticBuilder): void {
   for (let i = 0; i < 4; i++) b.box(0.03, 0.02, 4.2, 12.6 + i * 0.07, 0.01, 1.3, 'plastic', [MV.teal, MV.coral, MV.mustard, MV.indigo][i])
   // лаунж: журналы на столике
   for (let i = 0; i < 3; i++) b.box(0.22, 0.01, 0.3, -5.4 + (i - 1) * 0.18, 0.37 + i * 0.012, 10 + (rand() - 0.5) * 0.1, 'matte', [MV.coral, MV.sky, MV.mustard][i], { rotY: rand() - 0.5 })
-  // теннис: вторая ракетка
-  b.rbox(0.16, 0.02, 0.26, 0.01, 2.4, 0.75, 10.9, 'paint', MV.teal, { rotY: -0.8 })
 }
