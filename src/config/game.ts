@@ -35,7 +35,7 @@ export interface CharacterDef {
   blurb: string
   hp: number
   moveMul: number // множитель скорости бега
-  attackSpeedMul: number // множитель скорости атаки (больше — быстрее)
+  attackSpeedMul: number // скорость атаки персонажа: делит перезарядку и замах оружия (урон — только у оружия)
   dodge: number // шанс уклониться от удара, 0..1
   radius: number // размер хитбокса
   knockbackResist: number // 0 — отлетает полностью, 1 — не отлетает
@@ -44,19 +44,19 @@ export interface CharacterDef {
 export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   accountant: {
     id: 'accountant', name: 'Бухгалтерша', blurb: 'Хрупкая, но вёрткая. Видела всё.',
-    hp: 80, moveMul: 1.03, attackSpeedMul: 1.15, dodge: 0.15, radius: 0.38, knockbackResist: 0,
+    hp: 80, moveMul: 1.03, attackSpeedMul: 1.3, dodge: 0.15, radius: 0.38, knockbackResist: 0,
   },
   boss: {
     id: 'boss', name: 'Босс', blurb: 'Самый живучий и почти не отлетает от ударов, но медленный.',
-    hp: 120, moveMul: 0.92, attackSpeedMul: 0.95, dodge: 0, radius: 0.52, knockbackResist: 0.7,
+    hp: 120, moveMul: 0.92, attackSpeedMul: 0.8, dodge: 0, radius: 0.52, knockbackResist: 0.7,
   },
   secretary: {
     id: 'secretary', name: 'Секретарша', blurb: 'Печатает 300 знаков в минуту. И бьёт так же.',
-    hp: 90, moveMul: 1.04, attackSpeedMul: 1.25, dodge: 0, radius: 0.38, knockbackResist: 0,
+    hp: 90, moveMul: 1.04, attackSpeedMul: 1.5, dodge: 0, radius: 0.38, knockbackResist: 0,
   },
   courier: {
     id: 'courier', name: 'Курьер', blurb: 'Доставка за 30 секунд или пицца бесплатно.',
-    hp: 95, moveMul: 1.12, attackSpeedMul: 1.05, dodge: 0, radius: 0.42, knockbackResist: 0,
+    hp: 95, moveMul: 1.12, attackSpeedMul: 1.1, dodge: 0, radius: 0.42, knockbackResist: 0,
   },
 }
 

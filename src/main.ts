@@ -395,8 +395,12 @@ async function startGame(code: string | null): Promise<void> {
     onDie: (id, m) => match?.onDie(id, m),
     onPick: (id, m) => match?.onPick(id, m),
     onRoomFull: () => backToMenu('В этой комнате уже 4 человека. Создай свою и позови коллег!'),
+    onPickupSync: (c) => match?.syncPickups(c),
   })
   match = new Match(scene, office, hooks, net)
+  match.setSeed(code)
+  const mm = match
+  net.helloExtra = () => mm.pickupCounts()
   // карточка-приглашение, пока в комнате никого
   $('ic-code').textContent = code
   $('ic-link').textContent = inviteUrl(code)
@@ -586,3 +590,4 @@ window.addEventListener('beforeunload', () => net?.leave())
 requestAnimationFrame(frame)
 ;(window as unknown as { __match: () => Match | null }).__match = () => match
 ;(window as unknown as { __net: () => NetRoom | null }).__net = () => net
+;(window as unknown as { __cam: unknown }).__cam = camera

@@ -25,6 +25,7 @@ export type Hello = {
   character: CharacterId
   slot: number // номер лифта 0..3, -1 — ещё не выбрал
   v: string // версия игры
+  pc?: number[] // сколько раз брали каждый предмет — чтобы у новичка они лежали там же
 }
 
 export interface PeerInfo {
@@ -49,6 +50,8 @@ export interface NetEvents {
   onLink?(): void
   /** мой лифт пришлось сменить (двое зашли одновременно) */
   onSlotChange?(slot: number): void
+  /** счётчики предметов от другого игрока */
+  onPickupSync?(counts: unknown): void
 }
 
 /**
@@ -86,6 +89,8 @@ export class NetRoom {
   private left = false
   private topic: string
   mySlot = -1
+  /** Что ещё положить в приветствие (счётчики предметов) */
+  helloExtra: () => number[] = () => []
   /** диагностика: что приходит с каждого брокера, обрывы, почему кого-то потеряли */
   readonly stats = { rx: [0, 0], tx: 0, closes: [0, 0], drops: [] as string[], rtt: [0, 0] }
   readonly atk: (m: AtkMsg) => void
@@ -140,7 +145,7 @@ export class NetRoom {
   }
 
   private hello(to?: string): void {
-    this.send('hello', { name: this.myName, joinedAt: this.joinedAt, character: this.myCharacter, slot: this.mySlot, v: __BUILD__ } satisfies Hello, to)
+    this.send('hello', { name: this.myName, joinedAt: this.joinedAt, character: this.myCharacter, slot: this.mySlot, v: __BUILD__, pc: this.helloExtra() } satisfies Hello, to)
   }
 
   private send(k: string, d: unknown, to?: string, one = false): void {
@@ -189,6 +194,7 @@ export class NetRoom {
     const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v)
     switch (env.k) {
       case 'hello': {
+        this.ev.onPickupSync?.(d?.pc)
         const prev = this.peers.get(id)
         const ch = String(d?.character)
         const slot = Number(d?.slot)

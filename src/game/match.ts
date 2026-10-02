@@ -98,7 +98,7 @@ interface Projectile {
 
 interface PendingMelee { t: number; by: string; w: WeaponId; a: number; x: number; z: number }
 
-interface Pickup { spot: PickupSpot; mesh: THREE.Group; ring: THREE.Sprite; extras: THREE.Object3D[]; respawnIn: number }
+interface Pickup { spot: PickupSpot; mesh: THREE.Group; holder: THREE.Group; ring: THREE.Sprite; extras: THREE.Object3D[]; respawnIn: number; x: number; z: number; count: number }
 
 const DEG = Math.PI / 180
 const SHOT_Y = 1.15
@@ -128,18 +128,23 @@ export class Match {
     this.projTemplates = { staple: projectileMesh('staple'), bill: projectileMesh('bill') }
     for (const spot of office.pickups) {
       const mesh = new THREE.Group()
+      // держатель парит над полом; сам предмет внутри сдвинут так, чтобы держатель был в его середине
+      const holder = new THREE.Group()
       const item = weaponMesh(spot.kind)
-      item.scale.setScalar(spot.kind === 'coffee' ? 2.2 : spot.kind === 'mop' ? 1 : 2)
-      item.position.y = 0.75
-      if (spot.kind === 'mop') { item.rotation.x = -0.9; item.position.set(0, 0.4, -0.5) }
-      mesh.add(item)
+      const sc = spot.kind === 'coffee' ? 2.2 : spot.kind === 'mop' ? 1 : 2
+      item.scale.setScalar(sc)
+      const center = { mop: 0.5, lamp: 0.22, stapler: 0.05, moneygun: 0.05, coffee: 0, cutter: 0.05 }[spot.kind] * sc
+      item.position.z = -center
+      holder.add(item)
+      holder.position.y = spot.kind === 'mop' || spot.kind === 'lamp' ? 0.6 : 0.75
+      holder.rotation.y = 0.7 // длинные предметы лежат в воздухе наискосок
+      mesh.add(holder)
       // свечение вокруг предмета вместо кольца на полу
       const ring = new THREE.Sprite(new THREE.SpriteMaterial({
         map: glowTexture(), color: spot.kind === 'coffee' ? 0x9ff0d0 : 0xffe29a,
         transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending,
       }))
-      ring.userData.size = spot.kind === 'mop' ? 1.5 : 1.1
-      ring.position.set(0, spot.kind === 'mop' ? 0.45 : 0.78, spot.kind === 'mop' ? 0.1 : 0)
+      ring.userData.size = spot.kind === 'mop' ? 1.9 : spot.kind === 'lamp' ? 1.5 : 1.15
       mesh.add(ring)
       const extras: THREE.Object3D[] = []
       if (spot.kind === 'coffee') {
@@ -157,10 +162,65 @@ export class Match {
         mesh.add(plus)
         extras.push(plus)
       }
-      mesh.position.set(spot.x, 0, spot.z)
       scene.add(mesh)
-      this.pickups.push({ spot, mesh, ring, extras, respawnIn: 0 })
+      this.pickups.push({ spot, mesh, holder, ring, extras, respawnIn: 0, x: spot.x, z: spot.z, count: 0 })
     }
+    this.pickupSpots = this.findPickupSpots()
+    this.pickups.forEach((_, i) => this.placePickup(i))
+  }
+
+  // ---------- где лежат предметы: случайно, но одинаково у всех в комнате ----------
+
+  private seed = 1
+  private pickupSpots: { x: number; z: number }[] = []
+
+  /** Зерно комнаты: от кода офиса — у всех игроков одни и те же «случайные» места */
+  setSeed(code: string): void {
+    let h = 2166136261
+    for (const ch of code) h = Math.imul(h ^ ch.charCodeAt(0), 16777619)
+    this.seed = h >>> 0
+    this.pickups.forEach((_, i) => this.placePickup(i))
+  }
+
+  /** Все проходимые точки, куда можно положить предмет: не в мебели, не у лифтов */
+  private findPickupSpots(): { x: number; z: number }[] {
+    const { minX, maxX, minZ, maxZ } = this.office.bounds
+    const out: { x: number; z: number }[] = []
+    for (let x = minX + 1.2; x < maxX - 1; x += 1.6) {
+      for (let z = minZ + 1.2; z < maxZ - 1; z += 1.6) {
+        const blocked = this.office.colliders.some((c) => Math.abs(x - c.x) < c.hw + 0.75 && Math.abs(z - c.z) < c.hd + 0.75)
+        const nearLift = this.office.spawns.some((sp) => Math.hypot(sp.x - x, sp.z - z) < 4)
+        if (!blocked && !nearLift) out.push({ x, z })
+      }
+    }
+    return out
+  }
+
+  /** Номер места для предмета i после его count-го появления; соседей ближе 4 м не допускаем */
+  private placePickup(i: number): void {
+    const p = this.pickups[i]
+    const spots = this.pickupSpots
+    if (!spots.length) return
+    const rng = mulberry32((this.seed ^ Math.imul(i + 1, 0x9e3779b1) ^ Math.imul(p.count + 1, 0x85ebca6b)) >>> 0)
+    let k = Math.floor(rng() * spots.length)
+    for (let tries = 0; tries < spots.length; tries++, k = (k + 7) % spots.length) {
+      const s = spots[k]
+      if (this.pickups.every((o, j) => j === i || Math.hypot(o.x - s.x, o.z - s.z) > 4)) break
+    }
+    p.x = spots[k].x
+    p.z = spots[k].z
+    p.mesh.position.set(p.x, 0, p.z)
+  }
+
+  /** Сколько раз брали каждый предмет — для синхронизации с теми, кто зашёл позже */
+  pickupCounts(): number[] { return this.pickups.map((p) => p.count) }
+
+  syncPickups(counts: unknown): void {
+    if (!Array.isArray(counts)) return
+    counts.forEach((c, i) => {
+      const p = this.pickups[i]
+      if (p && Number.isInteger(c) && c > p.count) { p.count = c; this.placePickup(i) }
+    })
   }
 
   // ---------- участники ----------
@@ -666,13 +726,16 @@ export class Match {
         p.mesh.visible = p.respawnIn <= 0
         return
       }
-      const item = p.mesh.children[0]
-      item.rotation.y += dt * 1.6
-      item.position.y = (p.spot.kind === 'mop' ? 0.4 : 0.75) + Math.sin(this.time * 2.5 + i) * 0.08
+      const item = p.holder
+      const long = p.spot.kind === 'mop' || p.spot.kind === 'lamp'
+      // длинные (швабра, лампа) не крутятся — иначе проходят сквозь стены; мягко покачиваются в воздухе
+      if (long) item.rotation.set(Math.sin(this.time * 1.3 + i) * 0.06, 0.7 + Math.sin(this.time * 0.8 + i) * 0.12, Math.sin(this.time * 1.1 + i) * 0.05)
+      else item.rotation.y += dt * 1.6
+      item.position.y = (long ? 0.6 : 0.75) + Math.sin(this.time * 2.5 + i) * 0.08
       // свечение мягко дышит
       const pulse = p.ring.userData.size * (1 + Math.sin(this.time * 4 + i) * 0.1)
       p.ring.scale.set(pulse, pulse, 1)
-      p.ring.position.y = item.position.y + (p.spot.kind === 'mop' ? 0.05 : 0.03)
+      p.ring.position.y = item.position.y + 0.03
       for (const e of p.extras) {
         if (e.userData.plus) { e.position.y = 1.55 + Math.sin(this.time * 3 + i) * 0.06; continue }
         const t = (this.time * 0.6 + e.userData.phase) % 1
@@ -681,7 +744,7 @@ export class Match {
         e.scale.set(sc, sc, 1)
         ;(e as THREE.Sprite).material.opacity = 0.65 * (1 - t)
       }
-      if (!me || me.dead || Math.hypot(me.body.x - p.spot.x, me.body.z - p.spot.z) > 1.0) return
+      if (!me || me.dead || Math.hypot(me.body.x - p.x, me.body.z - p.z) > 1.0) return
       const k = p.spot.kind
       if (k === 'coffee') {
         // кофе берётся всегда: лечит, останавливает кровь и бодрит
@@ -707,6 +770,9 @@ export class Match {
     if (!p) return
     p.respawnIn = MATCH.pickupRespawn
     p.mesh.visible = false
+    // появится заново в другом случайном месте
+    p.count++
+    this.placePickup(i)
   }
 
   // ---------- победа и новый раунд ----------
