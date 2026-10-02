@@ -59,6 +59,9 @@ const setMute = (m: boolean) => { sfx.setMuted(m); muteBtn.textContent = m ? '�
 setMute(loadPref('mute') === '1')
 muteBtn.addEventListener('click', () => { setMute(!sfx.muted); muteBtn.blur() })
 
+// настройки (fps, звук, кровь, графика) прячутся за шестерёнкой, чтобы не занимать экран
+$('btn-settings').addEventListener('click', () => { document.querySelector('.fps')!.classList.toggle('open'); ($('btn-settings') as HTMLButtonElement).blur() })
+
 const goreSelect = $('gore') as HTMLSelectElement
 goreSelect.value = loadPref('gore') === 'off' ? 'off' : 'on'
 goreSelect.addEventListener('change', () => {
@@ -152,7 +155,16 @@ function renderScore(): void {
     dot.style.background = hex(f.color)
     const k = document.createElement('em')
     k.textContent = String(f.kills)
-    li.append(dot, document.createTextNode(`${f.name} · ${CHARACTERS[f.character].name}`), k)
+    const face = document.createElement('img')
+    face.src = PORTRAITS[f.character]
+    face.alt = CHARACTERS[f.character].name
+    face.title = CHARACTERS[f.character].name
+    face.style.borderColor = hex(f.color)
+    const nm = document.createElement('span')
+    nm.className = 'nm'
+    nm.textContent = f.name
+    nm.style.color = hex(f.color)
+    li.append(face, nm, k)
     if (f.kind === 'local') li.className = 'me'
     ul.appendChild(li)
   }
@@ -161,11 +173,11 @@ function renderScore(): void {
   if (net) {
     const r = net.relaysOnline()
     // пока никого нет — показываем, на связи ли серверы поиска: так понятно, где ломается
-    netLine = list.length > 1 ? '' : r.open === 0 ? ' · ⚠ нет связи с серверами поиска' : ` · поиск: ${r.open}/${r.total} серверов`
+    netLine = list.length > 1 ? '' : r.open === 0 ? ' · ⚠ нет связи с поиском' : ` · поиск ${r.open}/${r.total}`
   }
   $('net-status').textContent = !net
-    ? 'Тренировка: манекены у кулера'
-    : `До победы ${MATCH.killsToWin} · ` + (free > 0 ? `свободно мест: ${free}` : 'комната заполнена') + netLine
+    ? 'тренировка'
+    : `до ${MATCH.killsToWin} · ` + (free > 0 ? `мест ${free}` : 'полная') + netLine
 }
 
 let hudKey = ''
@@ -283,7 +295,6 @@ function renderCharacters(): void {
       stat('🏃', pct(c.moveMul), c.moveMul > 1, 'Скорость бега'),
       stat('⚔️', pct(c.attackSpeedMul), c.attackSpeedMul > 1, 'Скорость атаки'),
       c.dodge ? `<span class="up" title="Шанс уклониться">🌀 ${Math.round(c.dodge * 100)}%</span>` : '',
-      c.knockbackResist ? `<span class="up" title="Не сдвинуть">🪨 ${Math.round(c.knockbackResist * 100)}%</span>` : '',
     ].filter(Boolean)
     btn.innerHTML = `<img src="${PORTRAITS[id]}" alt=""><span class="info"><b>${c.name}</b><span class="stats">${parts.join('')}</span></span>`
     btn.addEventListener('click', () => {
@@ -390,7 +401,7 @@ $('btn-invite').addEventListener('click', async () => {
   const text = `${myName} вызывает тебя на офисную разборку! Комната ${net.code}`
   const coarse = window.matchMedia('(pointer: coarse)').matches
   if (coarse && navigator.share) {
-    try { await navigator.share({ title: 'Офисная ярость', text, url }); return } catch { /* отменили */ }
+    try { await navigator.share({ title: 'Офис', text, url }); return } catch { /* отменили */ }
   }
   try {
     await navigator.clipboard.writeText(`${text}\n${url}`)

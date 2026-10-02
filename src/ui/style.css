@@ -295,7 +295,7 @@ html, body {
 .char:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(61, 53, 87, 0.12); }
 .char img { width: 54px; height: 54px; border-radius: 12px; background: linear-gradient(160deg, #fbe8e3, #e3e9f7); flex: none; }
 .char .info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.char .stats { display: flex; flex-wrap: wrap; gap: 2px 8px; font-size: 12px; }
+.char .stats { display: flex; flex-direction: column; gap: 1px; font-size: 12px; }
 .char .stats span { white-space: nowrap; }
 
 /* Главная кнопка: яркая, дышит, на наведение — подъём и блик */
@@ -318,3 +318,97 @@ html, body {
 .btn.cta:active { transform: translateY(3px); box-shadow: 0 2px 0 #8e0b1f, 0 6px 16px rgba(229, 19, 46, 0.3); }
 .btn.cta:disabled { animation: none; filter: saturate(0.6); }
 @keyframes cta-breathe { 50% { box-shadow: 0 5px 0 #8e0b1f, 0 12px 34px rgba(229, 19, 46, 0.55); } }
+
+/* ================= Лёгкий HUD: прозрачный, мелкий, не мешает смотреть ================= */
+.logo {
+  font-family: 'Times New Roman', Times, 'Liberation Serif', serif;
+  font-weight: 700; font-size: 64px; letter-spacing: 0; line-height: 1;
+  color: #1f2a44; text-shadow: none;
+  text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 8px;
+}
+
+.panel.room {
+  background: rgba(255, 255, 255, 0.42); border: 0; box-shadow: none;
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  min-width: 0; padding: 6px 9px; border-radius: 10px;
+}
+.room-code { font-size: 11px; }
+.room-code b { font-size: 13px; letter-spacing: 1px; }
+#roster { margin-top: 4px; gap: 2px; font-size: 13px; }
+#roster li { gap: 6px; }
+#roster i { display: none; }
+#roster img { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid; background: #fff; }
+#roster .nm { font-weight: 600; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#roster li em { padding-left: 10px; }
+.status { margin-top: 3px; font-size: 10px; }
+
+.invite { padding: 7px 11px; font-size: 13px; box-shadow: 0 3px 0 #261f3a; right: 50px !important; }
+.settings-btn {
+  position: absolute; top: calc(max(12px, env(safe-area-inset-top)) + 2px); right: 12px; pointer-events: auto;
+  width: 30px; height: 30px; border-radius: 50%; border: 0; cursor: pointer;
+  background: rgba(255, 255, 255, 0.5); color: #3d3557; font-size: 16px; line-height: 30px; padding: 0;
+}
+.panel.fps { display: none; top: calc(max(12px, env(safe-area-inset-top)) + 44px); bottom: auto; right: 12px; background: rgba(255, 250, 246, 0.85); }
+.panel.fps.open { display: flex; }
+
+.me-panel {
+  background: rgba(255, 255, 255, 0.35); border: 0; box-shadow: none; min-width: 180px; padding: 6px 8px; gap: 4px;
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+}
+.hp { height: 14px; border-radius: 6px; }
+#hp-text { font-size: 10px; line-height: 14px; }
+.weapon { font-size: 12px; }
+.effects { font-size: 10px; min-height: 0; }
+#feed li { padding: 3px 8px; font-size: 12px; background: rgba(255, 255, 255, 0.5); border: 0; }
+.hint { font-size: 11px; background: rgba(255, 255, 255, 0.4); padding: 4px 10px; }
+
+/* Телефон: всё мельче, кнопка удара полупрозрачная, подсказки нет */
+@media (pointer: coarse) {
+  .hint { display: none; }
+  .invite { padding: 6px 9px; }
+  .invite .txt { display: none; }
+  .settings-btn { top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); }
+  .invite { top: max(8px, env(safe-area-inset-top)) !important; right: 46px !important; }
+  .me-panel { min-width: 120px; bottom: max(8px, env(safe-area-inset-bottom)); left: max(8px, env(safe-area-inset-left)); padding: 4px 6px; }
+  .me-panel .effects { display: none; }
+  .weapon { font-size: 11px; }
+  .panel.room { top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); }
+  #roster { font-size: 11px; }
+  #roster img { width: 15px; height: 15px; }
+  #feed { top: calc(max(8px, env(safe-area-inset-top)) + 44px); right: 8px; }
+  #feed li { font-size: 11px; }
+  #btn-attack {
+    width: 70px; height: 70px; font-size: 28px;
+    right: max(14px, env(safe-area-inset-right)); bottom: max(24px, env(safe-area-inset-bottom));
+    background: rgba(211, 18, 42, 0.32); box-shadow: none; border: 2px solid rgba(255, 255, 255, 0.55);
+  }
+  #btn-attack:active { background: rgba(211, 18, 42, 0.55); transform: scale(0.94); }
+  #death b { font-size: 36px; }
+  #death span { font-size: 12px; }
+}
+@media (pointer: coarse) and (max-height: 500px) {
+  .panel.room { padding: 4px 7px; }
+  .status { display: none; }
+}
+
+/* Меню всегда можно прокрутить, если не влезает */
+.overlay { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+/* Низкий экран (телефон боком): меню в две колонки, персонажи справа */
+@media (max-height: 560px) {
+  #menu { align-items: center; justify-items: center; padding: 8px; background: rgba(217, 220, 239, 0.55); }
+  #menu .card {
+    width: min(760px, 100%);
+    display: grid; grid-template-columns: 1fr 1.25fr; column-gap: 16px; row-gap: 8px;
+    padding: 14px 16px; align-items: start;
+  }
+  #menu .card > * { grid-column: 1; }
+  #menu .card .logo { font-size: 44px; }
+  #menu .card .tagline { font-size: 12px; margin: 0; }
+  #menu .card > div.field { display: none; }
+  #menu #chars { grid-column: 2; grid-row: 1 / span 6; margin: 0; }
+  #menu .field input { padding: 9px 12px; font-size: 15px; }
+  .char img { width: 40px; height: 40px; }
+  .char .stats { font-size: 11px; }
+  .btn.cta { padding: 12px; font-size: 16px; }
+}
