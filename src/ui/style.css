@@ -446,3 +446,13 @@ html, body {
 @media (max-height: 560px) {
   #menu .join-row, #menu #btn-create { grid-column: 1; }
 }
+
+/* Управление — в меню, а не в игре */
+.controls { font-size: 12px; color: var(--muted); text-align: center; line-height: 1.6; margin-top: 2px; }
+.controls b { color: var(--text); font-weight: 600; }
+.controls .ctl-touch { display: none; }
+@media (pointer: coarse) {
+  .controls .ctl-desk { display: none; }
+  .controls .ctl-touch { display: block; }
+}
+@media (max-height: 560px) { #menu .controls { grid-column: 1; font-size: 11px; } }
