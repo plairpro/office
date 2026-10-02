@@ -440,7 +440,7 @@ export class Avatar {
     this.root.add(this.ring)
 
     this.label = makeLabel(name, color)
-    this.label.position.y = this.height + 0.7
+    this.label.position.y = this.height + 0.5
     this.root.add(this.label)
 
     // полоска здоровья над головой
@@ -585,7 +585,7 @@ export class Avatar {
     ;(this.label.material as THREE.SpriteMaterial).map?.dispose()
     this.label.material.dispose()
     this.label = makeLabel(name, color)
-    this.label.position.y = this.height + 0.7
+    this.label.position.y = this.height + 0.5
     this.root.add(this.label)
   }
 
@@ -641,19 +641,25 @@ function makeLabel(text: string, color: number): THREE.Sprite {
   const tw = Math.min(ctx.measureText(text).width, 200)
   const dot = 7, gap = 9
   const x0 = (256 - (tw + dot * 2 + gap)) / 2
-  ctx.shadowColor = 'rgba(40, 34, 70, 0.55)'
-  ctx.shadowBlur = 5
+  ctx.shadowColor = 'rgba(30, 25, 55, 0.9)'
+  ctx.shadowBlur = 4
+  ctx.shadowOffsetY = 1.5
   ctx.fillStyle = '#' + color.toString(16).padStart(6, '0')
   ctx.beginPath()
   ctx.arc(x0 + dot, 24, dot - 1, 0, Math.PI * 2)
   ctx.fill()
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.96)'
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
+  // тонкая тёмная обводка + тень: белый текст читается и на светлом полу
+  ctx.lineWidth = 3
+  ctx.lineJoin = 'round'
+  ctx.strokeStyle = 'rgba(40, 34, 70, 0.45)'
+  ctx.strokeText(text, x0 + dot * 2 + gap, 25, 200)
+  ctx.fillStyle = '#ffffff'
   ctx.fillText(text, x0 + dot * 2 + gap, 25, 200)
   const tex = new THREE.CanvasTexture(canvas)
   tex.colorSpace = THREE.SRGBColorSpace
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, opacity: 0.9 }))
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }))
   sprite.scale.set(1.9, 0.36, 1)
   sprite.renderOrder = 10
   return sprite
