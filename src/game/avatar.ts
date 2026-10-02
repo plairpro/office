@@ -2,250 +2,57 @@ import * as THREE from 'three'
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
 import type { AABB } from '../scene/builder'
 import { GAME, CHARACTERS, type CharacterId } from '../config/game'
-import { getAssets, type BaseChar } from '../assets'
+import { getAssets } from '../assets'
 import { weaponMesh } from './weapons3d'
-import { meshComponents, removeComponents, type Component } from './parts'
 import type { WeaponId } from '../config/game'
 
 // ======================================================================
-// Офисные персонажи на базе CC0-героев KayKit: та же модель и 27 анимаций,
-// но одежда перекрашена в атласе (отдельно для торса, рук и ног), оружие и
-// доспехи убраны, добавлены аксессуары на костях (очки, кепка, пицца, галстук).
+// Офисные персонажи — CC0-модели Quaternius «Ultimate Modular Men / Women»:
+// настоящая офисная одежда (костюмы, худи, платье), у каждой вещи свой материал —
+// перекрашиваем материалы в пастельную палитру. Цвет игрока — только на аксессуарах.
 // ======================================================================
 
 const HEIGHT = 1.85 // рост в метрах после масштабирования
+const SKIN = 0xf2c39b
 
-type Group = 'Body' | 'Arm' | 'Leg' | 'Head'
-/** Прямоугольник ячеек атласа 64×64 (включительно) → новый цвет. 'P' = цвет игрока */
-type Rule = [x0: number, y0: number, x1: number, y1: number, color: number | 'P' | 'P+']
-type Part = 'Body' | 'Arm' | 'Leg'
-/**
- * Одежда: цвет ячейки атласа по тому, где она на теле.
- * h — высота от пола (0 — подошвы, 1 — макушка), side — насколько далеко от оси тела (1 — кончики рук).
- * Цвет игрока на одежду не идёт — он только на аксессуарах (галстук, кепка, бейдж) и на подписи.
- */
-type Paint = (part: Part, h: number, side: number) => number
-type Look = { base: BaseChar; paint: Paint; head?: Rule[]; force?: Partial<Record<Part, Record<string, number>>>; accessories: (rig: Rig, color: number) => void }
-
-const SKIN = 0xf5c4a0
-const HIPS = 0.26 // ниже — брюки или юбка
-const SHOES = 0.095 // ниже — обувь
-const HANDS = 0.8 // дальше от оси — кисти
-
-/**
- * Остатки фэнтези-снаряжения, которые надо вырезать из геометрии: ремни, пряжки, гербы, сумки, фляги, наплечники.
- * Задаются ячейками атласа (x,y в сетке 16×16) для части тела; small — убрать мелкие отдельные куски (пряжки, серьги).
- */
-const STRIP: Record<BaseChar, Partial<Record<'Body' | 'Arm' | 'Head', { cells?: string[]; small?: number }>>> = {
-  knight: {
-    Body: { cells: ['0,4', '1,4', '0,5', '1,5', '0,6', '1,6', '0,7', '1,7', '2,5', '2,6', '2,7', '3,4', '3,5', '3,6', '3,7'], small: 200 },
-    Arm: { cells: ['14,0', '14,1', '15,0', '15,1'] },
-  },
-  barbarian: {
-    Body: { cells: ['6,1', '7,1', '6,2', '7,2', '6,3', '7,3'], small: 200 },
-  },
-  mage: {
-    Body: { cells: ['4,8', '4,9', '4,10', '4,11', '0,9', '0,10', '0,11'], small: 200 },
-  },
-  rogue: {
-    Body: { cells: ['10,1', '11,1', '10,2', '11,2', '12,0', '12,1', '13,1', '12,2', '13,2', '12,3', '13,3', '6,0', '7,0', '6,1', '7,1', '6,2', '7,2'], small: 200 },
-    Head: { small: 30 },
-  },
-}
-
-/** Вырезает снаряжение из геометрии базовой модели (один раз: геометрия общая у всех копий) */
-function stripGear(base: BaseChar, model: THREE.Object3D): void {
-  const rules = STRIP[base]
-  model.traverse((o) => {
-    if (!(o instanceof THREE.SkinnedMesh) || o.geometry.userData.stripped) return
-    o.geometry.userData.stripped = true
-    const part = /Arm/.test(o.name) ? 'Arm' : /Head/.test(o.name) ? 'Head' : /Leg/.test(o.name) ? null : 'Body'
-    const rule = part ? rules[part] : undefined
-    if (!rule) return
-    const g = o.geometry, idx = g.index, uv = g.attributes.uv
-    if (!idx) return
-    if (rule.cells) {
-      const cells = new Set(rule.cells)
-      for (let t = 0; t < idx.count / 3; t++) {
-        let cx = 0, cy = 0
-        for (let k = 0; k < 3; k++) { const i = idx.getX(t * 3 + k); cx += uv.getX(i); cy += uv.getY(i) }
-        if (cells.has(`${Math.floor(cx / 3 * 16)},${Math.floor(cy / 3 * 16)}`)) {
-          const a = idx.getX(t * 3); idx.setX(t * 3 + 1, a); idx.setX(t * 3 + 2, a)
-        }
-      }
-      idx.needsUpdate = true
-    }
-    if (rule.small) {
-      const comps = meshComponents(o)
-      const drop: Component[] = comps.slice(1).filter((c) => c.tris.length < rule.small!)
-      // у головы мелкие куски — это глаза, брови, уши; режем только то, что далеко сбоку (серьги)
-      removeComponents(o, part === 'Head' ? drop.filter((c) => Math.min(Math.abs(c.min.x), Math.abs(c.max.x)) > 0.42) : drop)
-    }
-  })
-}
+/** 'P' — цвет игрока */
+type Paint = Record<string, number | 'P'>
+type Look = { paint: Paint; accessories: (rig: Rig, color: number) => void }
 
 const LOOKS: Record<CharacterId, Look> = {
-  // Курьер ← рыцарь: куртка доставки, джинсы, белые кроссовки, кепка цвета игрока, коробка пиццы
+  // Курьер: оранжевая худи доставки, джинсовые шорты, кепка цвета игрока, коробка пиццы
   courier: {
-    base: 'knight',
-    paint: (p, h, side) =>
-      p === 'Arm' ? (side > HANDS ? SKIN : 0xf2b13f)
-        : p === 'Leg' ? (h < SHOES ? 0xf4f3f7 : 0x5f7fae)
-          : h < HIPS ? 0x5f7fae : 0xf2b13f,
+    paint: { Purple: 0xf2a03f, LightBlue: 0x5f7fae, White: 0xf4f3f7, Hair: 0x5a3a22, Skin: SKIN },
     accessories: (rig, color) => { cap(rig, color); pizza(rig); badge(rig, color) },
   },
-  // Босс ← варвар: белая рубашка, бежевые брюки, коричневые ботинки, галстук цвета игрока
+  // Босс: бежевый костюм, белая рубашка, галстук цвета игрока, коричневые ботинки, седина
   boss: {
-    base: 'barbarian',
-    paint: (p, h, side) =>
-      p === 'Arm' ? (side > HANDS ? SKIN : 0xfbfaf6)
-        : p === 'Leg' ? (h < SHOES ? 0x7a4d30 : 0xd8c3a0)
-          : h < HIPS ? 0xd8c3a0 : 0xfbfaf6,
-    // меховая юбка и пряжка варвара — в цвет рубашки: выглядит как рубашка навыпуск
-    force: { Body: Object.fromEntries(['4,5', '4,6', '4,7', '5,5', '5,6', '5,7', '12,3', '13,1', '13,2', '13,3', '4,4', '14,6', '15,6', '12,1', '12,0'].map((c) => [c, 0xfbfaf6])) },
-    accessories: (rig, color) => tie(rig, color),
+    paint: { Suit: 0xcdb48e, White: 0xfbfaf6, Tie: 'P', Black: 0x6b4430, DarkBrown: 0x6b4430, Grey: 0x8a8a8a, Hair: 0xb9b4ad, Eyebrows: 0x8f8a84, Skin: SKIN },
+    accessories: () => {},
   },
-  // Бухгалтерша ← маг: седое каре, серо-сиреневый кардиган, коричневая юбка, телесные колготки, огромные очки
+  // Бухгалтерша: сиреневый брючный костюм, белая блузка, седое каре, огромные очки
   accountant: {
-    base: 'mage',
-    paint: (p, h, side) =>
-      p === 'Arm' ? (side > HANDS ? SKIN : 0x9c93b8)
-        : p === 'Leg' ? (h < SHOES ? 0x4b3e48 : h > 0.17 ? 0x6e5257 : 0xe2c2a8)
-          : h < HIPS ? 0x6e5257 : 0x9c93b8,
-    head: [[2, 0, 3, 2, 0xdcdae6]],
-    // пояс мага — в цвет кардигана (вырезать нельзя: под ним дыра)
-    force: { Body: Object.fromEntries(['10,0', '11,0', '10,1', '11,1', '10,2', '11,2', '10,3', '11,3'].map((c) => [c, 0x9c93b8])) },
+    paint: { Black: 0x8d82b4, White: 0xfbfaf6, Hair_Brown: 0xdcdae6, Hair_Blond: 0xdcdae6, Brown: 0x4b3e48, Skin: SKIN },
     accessories: (rig, color) => { glasses(rig); badge(rig, color) },
   },
-  // Секретарша ← разбойница: белая блузка, тёмная юбка-карандаш, колготки, чёрные туфли
+  // Секретарша: тёмно-синее платье, каштановые волосы
   secretary: {
-    base: 'rogue',
-    paint: (p, h, side) =>
-      p === 'Arm' ? (side > HANDS ? SKIN : 0xfdfaf4)
-        : p === 'Leg' ? (h < SHOES ? 0x2f2d3d : h > 0.17 ? 0x3e3b60 : 0xeec6aa)
-          : h < HIPS ? 0x3e3b60 : 0xfdfaf4,
+    paint: { LimeGreen: 0x3e3b70, Red: 0x7a4a2c, Gold: 0xf0c26c, Brown: 0x2f2d3d, Skin: SKIN },
     accessories: (rig, color) => badge(rig, color),
   },
 }
 
-/** Похоже на кожу (лицо, руки) — такие ячейки не перекрашиваем */
-function isSkin(r: number, g: number, b: number): boolean {
-  return r > 200 && g > 160 && b > 140 && r >= g && g >= b && r - b > 25
+/** Какие клипы играть (названия из паков Quaternius) */
+const CLIP = { idle: 'Idle', run: 'Run', walk: 'Walk' }
+/** Старые названия анимаций (из пака KayKit) → новые */
+const LEGACY: Record<string, string> = {
+  Hit_A: 'HitRecieve', Hit_B: 'HitRecieve', Dodge_Forward: 'Roll', Death_A: 'Death', Cheer: 'Punch_Right',
+  Unarmed_Melee_Attack_Punch_A: 'Punch_Right', '1H_Melee_Attack_Stab': 'Punch_Right', '1H_Ranged_Shoot': 'Gun_Shoot',
+  '2H_Melee_Attack_Slice': 'Sword_Slash', '2H_Melee_Attack_Chop': 'Sword_Slash', '1H_Melee_Attack_Chop': 'Sword_Slash',
 }
-
-/** Для каждой ячейки атласа: средняя высота и удалённость от оси у вершин этой части тела */
-const statsCache = new Map<string, Map<string, { h: number; side: number }>>()
-function cellStats(base: BaseChar, model: THREE.Object3D, part: Part): Map<string, { h: number; side: number }> {
-  const key = `${base}:${part}`
-  const hit = statsCache.get(key)
-  if (hit) return hit
-  model.updateMatrixWorld(true)
-  const box = new THREE.Box3().setFromObject(model)
-  const H = box.max.y - box.min.y
-  const acc = new Map<string, { h: number; side: number; n: number }>()
-  const meshes: THREE.SkinnedMesh[] = []
-  model.traverse((o) => { if (o instanceof THREE.SkinnedMesh && groupOf(o.name) === part) meshes.push(o) })
-  const v = new THREE.Vector3()
-  let maxSide = 1e-3
-  const pts: [string, number, number][] = []
-  for (const m of meshes) {
-    const uv = m.geometry.attributes.uv
-    const n = m.geometry.attributes.position.count
-    for (let i = 0; i < n; i++) {
-      m.getVertexPosition(i, v)
-      v.applyMatrix4(m.matrixWorld)
-      const cx = Math.floor(uv.getX(i) * 16), cy = Math.floor(uv.getY(i) * 16)
-      const side = Math.abs(v.x)
-      maxSide = Math.max(maxSide, side)
-      pts.push([`${cx},${cy}`, (v.y - box.min.y) / H, side])
-    }
-  }
-  for (const [k, h, side] of pts) {
-    const a = acc.get(k) ?? { h: 0, side: 0, n: 0 }
-    a.h += h; a.side += side / maxSide; a.n++
-    acc.set(k, a)
-  }
-  const out = new Map<string, { h: number; side: number }>()
-  for (const [k, a] of acc) out.set(k, { h: a.h / a.n, side: a.side / a.n })
-  statsCache.set(key, out)
-  return out
-}
-
-/** Правила перекраски одежды для части тела */
-function outfitRules(look: Look, model: THREE.Object3D, part: Part, src: THREE.Texture): Rule[] {
-  const img = src.image as CanvasImageSource & { width: number; height: number }
-  const c = document.createElement('canvas')
-  c.width = c.height = 16
-  const g = c.getContext('2d')!
-  g.drawImage(img, 0, 0, 16, 16) // по пикселю на ячейку — средний цвет
-  const px = g.getImageData(0, 0, 16, 16).data
-  const rules: Rule[] = []
-  for (const [k, st] of cellStats(look.base, model, part)) {
-    const [x, y] = k.split(',').map(Number)
-    if (x < 0 || y < 0 || x > 15 || y > 15) continue
-    const i = (y * 16 + x) * 4
-    if (isSkin(px[i], px[i + 1], px[i + 2])) continue
-    rules.push([x, y, x, y, look.force?.[part]?.[k] ?? look.paint(part, st.h, st.side)])
-  }
-  return rules
-}
-
-// ---------- перекраска атласа ----------
 
 function lighten(hex: number, k: number): number {
-  const c = new THREE.Color(hex)
-  c.lerp(new THREE.Color(0xffffff), k)
-  return c.getHex()
-}
-
-/** Перекрашивает области атласа, сохраняя градиент объёма внутри ячеек */
-function recolor(src: THREE.Texture, rules: Rule[], player: number): THREE.Texture {
-  const img = src.image as ImageBitmap | HTMLImageElement | HTMLCanvasElement
-  const S = 512 // атлас из плоских ячеек — половинного размера хватает
-  const k = S / 1024
-  const c = document.createElement('canvas')
-  c.width = c.height = S
-  const g = c.getContext('2d')!
-  g.drawImage(img, 0, 0, S, S)
-  const data = g.getImageData(0, 0, S, S)
-  const px = data.data
-  const tmp = new THREE.Color()
-  for (const [x0, y0, x1, y1, col] of rules) {
-    // одежда чуть светлее чистого цвета игрока — насыщенный красный оставляем только крови
-    const hex = col === 'P' ? lighten(player, 0.2) : col === 'P+' ? lighten(player, 0.45) : col
-    tmp.setHex(hex)
-    const tr = tmp.r * 255, tg = tmp.g * 255, tb = tmp.b * 255
-    const X0 = x0 * 64 * k, Y0 = y0 * 64 * k, X1 = (x1 + 1) * 64 * k, Y1 = (y1 + 1) * 64 * k
-    // средняя яркость области — опорная
-    let sum = 0, n = 0
-    for (let y = Y0; y < Y1; y++) for (let x = X0; x < X1; x++) {
-      const i = (y * S + x) * 4
-      sum += 0.3 * px[i] + 0.59 * px[i + 1] + 0.11 * px[i + 2]; n++
-    }
-    const mean = Math.max(sum / n, 1)
-    for (let y = Y0; y < Y1; y++) for (let x = X0; x < X1; x++) {
-      const i = (y * S + x) * 4
-      const l = (0.3 * px[i] + 0.59 * px[i + 1] + 0.11 * px[i + 2]) / mean
-      const f = 0.55 + 0.45 * l // смягчаем перепад: пастель, а не контраст
-      px[i] = Math.min(255, tr * f)
-      px[i + 1] = Math.min(255, tg * f)
-      px[i + 2] = Math.min(255, tb * f)
-    }
-  }
-  g.putImageData(data, 0, 0)
-  const t = new THREE.CanvasTexture(c)
-  t.flipY = src.flipY
-  t.colorSpace = THREE.SRGBColorSpace
-  t.magFilter = THREE.NearestFilter // ячейки атласа не должны размываться на швах
-  t.minFilter = THREE.LinearMipmapLinearFilter
-  return t
-}
-
-function groupOf(meshName: string): Group {
-  if (/Arm/.test(meshName)) return 'Arm'
-  if (/Leg/.test(meshName)) return 'Leg'
-  if (/Head/.test(meshName)) return 'Head'
-  return 'Body'
+  return new THREE.Color(hex).lerp(new THREE.Color(0xffffff), k).getHex()
 }
 
 // ---------- аксессуары ----------
@@ -253,6 +60,8 @@ function groupOf(meshName: string): Group {
 interface Rig {
   /** габариты части тела в пространстве модели (поза покоя, до масштабирования) */
   box(part: string): THREE.Box3
+  /** мировая точка кости (в стойке, до масштабирования) */
+  bone(name: string): THREE.Vector3
   /** крепит объект к кости; position — точка в пространстве модели, объект смотрит вперёд модели */
   attach(boneName: string, o: THREE.Object3D, position: THREE.Vector3): void
   disposables: (THREE.BufferGeometry | THREE.Material | THREE.Texture)[]
@@ -281,7 +90,7 @@ function glasses(rig: Rig): void {
   }
   const bridge = new THREE.Mesh(geo(new THREE.BoxGeometry(r * 0.5, r * 0.15, r * 0.15), rig), frame)
   g.add(bridge)
-  rig.attach('head', g, new THREE.Vector3(0, b.min.y + (b.max.y - b.min.y) * 0.45, b.max.z + r * 0.1))
+  rig.attach('Head', g, new THREE.Vector3(0, b.min.y + (b.max.y - b.min.y) * 0.56, b.max.z + r * 0.15))
 }
 
 function cap(rig: Rig, color: number): void {
@@ -299,55 +108,25 @@ function cap(rig: Rig, color: number): void {
   button.position.y = w * 0.62
   g.add(dome, brim, button)
   g.name = 'cap'
-  rig.attach('head', g, new THREE.Vector3(0, b.min.y + (b.max.y - b.min.y) * 0.74, (b.min.z + b.max.z) / 2))
+  rig.attach('Head', g, new THREE.Vector3(0, b.min.y + (b.max.y - b.min.y) * 0.8, (b.min.z + b.max.z) / 2))
 }
 
 function pizza(rig: Rig): void {
   const box = new THREE.Group()
-  const s = 0.42
+  const hb = rig.box('Head')
+  const s = (hb.max.x - hb.min.x) * 1.5
   const lid = new THREE.Mesh(geo(new THREE.BoxGeometry(s, s * 0.14, s), rig), mat(0xf2d29b, rig))
   const logo = new THREE.Mesh(geo(new THREE.CylinderGeometry(s * 0.2, s * 0.2, 0.01, 20), rig), mat(0xe8505b, rig))
   logo.position.y = s * 0.075
   box.add(lid, logo)
-  const hand = rig.box('ArmLeft')
-  rig.attach('handslot.l', box, new THREE.Vector3(hand.max.x + s * 0.1, hand.min.y + s * 0.15, s * 0.35))
-}
-
-function tie(rig: Rig, color: number): void {
-  const b = rig.box('Body')
-  const h = (b.max.y - b.min.y) * 0.5
-  const g = new THREE.Group()
-  const m = mat(color, rig)
-  const flat = (pts: [number, number][], depth: number) => {
-    const sh = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x * h, y * h)))
-    const ge = geo(new THREE.ExtrudeGeometry(sh, { depth: depth * h, bevelEnabled: true, bevelSize: 0.008 * h, bevelThickness: 0.008 * h, bevelSegments: 1 }), rig)
-    ge.translate(0, 0, -depth * h / 2)
-    return new THREE.Mesh(ge, m)
-  }
-  // узел — трапеция, лопасть — расширяется книзу и заканчивается острым мысом
-  const knot = flat([[-0.09, 0.06], [0.09, 0.06], [0.055, -0.07], [-0.055, -0.07]], 0.07)
-  const blade = flat([[-0.05, -0.06], [0.05, -0.06], [0.13, -0.62], [0, -0.76], [-0.13, -0.62]], 0.03)
-  blade.rotation.x = -0.12 // ложится на живот
-  // уголки воротника рубашки
-  const white = mat(0xfbfaf6, rig)
-  for (const sx of [-1, 1]) {
-    const c = new THREE.Mesh(geo(new THREE.ExtrudeGeometry(new THREE.Shape([
-      new THREE.Vector2(0, 0.08 * h), new THREE.Vector2(sx * 0.2 * h, 0.06 * h), new THREE.Vector2(sx * 0.06 * h, -0.1 * h)]),
-    { depth: 0.02 * h, bevelEnabled: false }), rig), white)
-    c.position.set(sx * 0.03 * h, 0, 0.02 * h)
-    c.rotation.x = -0.25
-    c.userData.keep = true // воротник не перекрашивается в цвет игрока
-    g.add(c)
-  }
-  g.add(knot, blade)
-  g.name = 'tie'
-  rig.attach('chest', g, new THREE.Vector3(0, b.max.y - h * 0.22, b.max.z + 0.01))
+  const w = rig.bone('Wrist.L')
+  rig.attach('Wrist.L', box, new THREE.Vector3(w.x - s * 0.15, w.y + s * 0.1, w.z + s * 0.3))
 }
 
 /** Офисный бейдж на шнурке цвета игрока — чтобы в драке отличать своих от чужих */
 function badge(rig: Rig, color: number): void {
-  const b = rig.box('Body')
-  const h = (b.max.y - b.min.y) * 0.5
+  const hb = rig.box('Head')
+  const h = (hb.max.y - hb.min.y) * 0.6 // масштаб — от головы: тело у мужчин и женщин разное
   const g = new THREE.Group()
   const m = mat(color, rig)
   const card = new THREE.Mesh(geo(new THREE.BoxGeometry(h * 0.32, h * 0.42, h * 0.03), rig), m)
@@ -364,25 +143,17 @@ function badge(rig: Rig, color: number): void {
   }
   g.add(card, photo)
   g.name = 'badge'
-  rig.attach('chest', g, new THREE.Vector3(0, b.max.y - h * 0.2, b.max.z + 0.015))
+  const neck = rig.bone('Neck')
+  rig.attach('Chest', g, new THREE.Vector3(neck.x, neck.y - h * 0.15, hb.max.z - h * 0.12))
 }
 
 // ---------- аватар ----------
-
-/** Какие клипы играть. Названия — из пака KayKit */
-const CLIP = {
-  idle: 'Idle',
-  run: 'Running_A',
-  walk: 'Walking_A',
-  hit: 'Hit_A',
-  death: 'Death_A',
-  cheer: 'Cheer',
-}
 
 export class Avatar {
   readonly root = new THREE.Group()
   private model: THREE.Object3D
   private mixer: THREE.AnimationMixer
+  private clips: Map<string, THREE.AnimationClip>
   private actions = new Map<string, THREE.AnimationAction>()
   private current: THREE.AnimationAction | null = null
   private label: THREE.Sprite
@@ -410,51 +181,58 @@ export class Avatar {
   constructor(name: string, private color: number, readonly character: CharacterId, _look = 0) {
     const look = LOOKS[character]
     const a = getAssets()
-    stripGear(look.base, a.chars[look.base].scene)
-    this.model = SkeletonUtils.clone(a.chars[look.base].scene)
+    this.clips = a.clips[character]
+    this.model = SkeletonUtils.clone(a.chars[character].scene)
 
-    // перекраска по группам мешей
-    const cache = new Map<Group, THREE.Material>()
+    // перекраска: у каждой вещи свой материал — красим материал целиком
+    const cache = new Map<string, THREE.MeshStandardMaterial>()
     this.model.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return
       o.castShadow = true
       o.frustumCulled = false // кости двигают вершины за пределы исходных габаритов
-      const grp = groupOf(o.name)
-      let m = cache.get(grp)
+      const src = o.material as THREE.MeshStandardMaterial
+      let m = cache.get(src.name)
       if (!m) {
-        const src = o.material as THREE.MeshStandardMaterial
-        const nm = src.clone()
-        nm.roughness = 0.8
-        nm.metalness = 0
-        const rules = !src.map ? null : grp === 'Head' ? look.head ?? null : outfitRules(look, this.model, grp, src.map)
-        if (rules && rules.length && src.map) {
-          nm.map = recolor(src.map, rules, color)
-          this.disposables.push(nm.map)
-        }
-        this.disposables.push(nm)
-        cache.set(grp, nm)
-        m = nm
+        m = new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0, flatShading: true })
+        const c = look.paint[src.name]
+        if (c === 'P') { m.color.setHex(lighten(color, 0.1)); m.userData.player = true }
+        else if (c !== undefined) m.color.setHex(c)
+        else m.color.copy(src.color).convertLinearToSRGB().lerp(new THREE.Color(0xffffff), 0.25).convertSRGBToLinear()
+        m.name = src.name
+        this.disposables.push(m)
+        cache.set(src.name, m)
       }
       o.material = m
     })
 
-    // аксессуары — в позе покоя, пока модель без масштаба
+    // анимации; аксессуары и оружие крепим в стойке (а не в исходной Т-позе) — так они сидят как надо
+    this.mixer = new THREE.AnimationMixer(this.model)
+    for (const [key, clipName] of Object.entries(CLIP)) {
+      const clip = this.clips.get(clipName)
+      if (clip) this.actions.set(key, this.mixer.clipAction(clip))
+    }
+    this.play('idle', 0)
+    this.mixer.update(0.4)
     const model = this.model
     model.updateMatrixWorld(true)
     const tq = new THREE.Quaternion(), tv = new THREE.Vector3(), ts = new THREE.Vector3()
     const rig: Rig = {
       box: (part) => {
-        let mesh: THREE.SkinnedMesh | null = null
-        model.traverse((o) => { if (!mesh && o instanceof THREE.SkinnedMesh && o.name.endsWith(part)) mesh = o })
-        const m = mesh as THREE.SkinnedMesh | null
-        if (!m) return new THREE.Box3(new THREE.Vector3(-0.3, 1, -0.3), new THREE.Vector3(0.3, 1.6, 0.3))
-        // вершины сжаты (KHR_mesh_quantization), распаковка спрятана в костях —
-        // поэтому габариты считаем по реально скиннутым вершинам
-        m.computeBoundingBox()
-        return m.boundingBox!.clone().applyMatrix4(m.matrixWorld)
+        // меш из нескольких материалов — это группа «Suit_Head» с кусками внутри
+        const box = new THREE.Box3()
+        model.traverse((o) => {
+          if (!(o instanceof THREE.SkinnedMesh) || !(o.name.endsWith(part) || o.parent?.name.endsWith(part))) return
+          o.computeBoundingBox() // по скиннутым вершинам в текущей позе
+          box.union(o.boundingBox!.clone().applyMatrix4(o.matrixWorld))
+        })
+        return box.isEmpty() ? new THREE.Box3(new THREE.Vector3(-0.1, 1.5, -0.1), new THREE.Vector3(0.1, 1.8, 0.2)) : box
+      },
+      bone: (boneName) => {
+        const bone = model.getObjectByName(THREE.PropertyBinding.sanitizeNodeName(boneName))
+        return bone ? bone.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3()
       },
       attach: (boneName, o, pos) => {
-        // GLTFLoader убирает точки из имён: handslot.r → handslotr
+        // GLTFLoader убирает точки из имён: Wrist.R → WristR
         const bone = model.getObjectByName(THREE.PropertyBinding.sanitizeNodeName(boneName))
         if (!bone) return
         o.traverse((x) => { if (x instanceof THREE.Mesh) x.castShadow = true })
@@ -467,14 +245,10 @@ export class Avatar {
       disposables: this.disposables,
     }
     look.accessories(rig, color)
-    // гнездо для оружия в правой руке, оси — как у модели (вперёд = +Z)
-    const hand = rig.box('ArmRight')
-    rig.attach('handslot.r', this.socket, new THREE.Vector3(hand.min.x + 0.05, hand.min.y + 0.12, (hand.min.z + hand.max.z) / 2))
-    // как в паке KayKit: оружие крепится к слоту руки без поворота, «вперёд» оружия = ось Y слота
-    this.socket.position.set(0, 0, 0)
-    this.socket.quaternion.identity()
-    this.socket.rotation.x = -Math.PI / 2
-    this.head = model.getObjectByName('head') ?? null
+    // гнездо для оружия: в кулаке правой руки, оси — как у модели в стойке (вперёд = +Z)
+    const grip = rig.bone('Wrist.R').lerp(rig.bone('Middle1.R'), 0.8)
+    rig.attach('Wrist.R', this.socket, grip)
+    this.head = model.getObjectByName('Head') ?? null
 
     // масштаб под рост и опора на пол
     const box = new THREE.Box3().setFromObject(this.model)
@@ -484,9 +258,8 @@ export class Avatar {
     this.socket.scale.multiplyScalar(1 / k)
     const hb = rig.box('Head')
     this.headSize = Math.max(hb.max.y - hb.min.y, hb.max.x - hb.min.x) * k
-    cache.forEach((m) => this.mats.push(m as THREE.MeshStandardMaterial))
+    cache.forEach((m) => this.mats.push(m))
 
-    this.mixer = new THREE.AnimationMixer(this.model)
     this.mixer.addEventListener('finished', (e) => {
       if (e.action === this.oneShot) {
         // плавно возвращаемся в стойку прямо из разовой анимации: если сначала погасить её, а потом
@@ -503,12 +276,6 @@ export class Avatar {
     })
 
     this.root.add(this.model)
-
-    // анимации
-    for (const [key, clipName] of Object.entries(CLIP)) {
-      const clip = a.clips.get(clipName)
-      if (clip) this.actions.set(key, this.mixer.clipAction(clip))
-    }
     this.play('idle', 0)
     this.mixer.update(0) // сразу встаём в стойку, без кадра в исходной позе
 
@@ -588,7 +355,7 @@ export class Avatar {
   /** Разовая анимация поверх бега: удар, выстрел, получение урона */
   action(clipName: string, speed = 1): void {
     if (this.dead) return
-    const clip = getAssets().clips.get(clipName)
+    const clip = this.clips.get(LEGACY[clipName] ?? clipName)
     if (!clip) return
     const a = this.mixer.clipAction(clip)
     a.reset()
@@ -614,8 +381,8 @@ export class Avatar {
       })
     }
     this.weaponObj = weaponMesh(id)
-    // мультяшные руки крупнее настоящих — оружие тоже чуть увеличиваем, чтобы читалось сверху
-    this.weaponObj.scale.setScalar(id === 'mop' ? 1.15 : id === 'lamp' ? 2 : 2.5)
+    // оружие чуть крупнее настоящего, чтобы читалось сверху
+    this.weaponObj.scale.setScalar(id === 'mop' ? 1 : id === 'lamp' ? 1.4 : 1.7)
     this.socket.add(this.weaponObj)
   }
 
@@ -638,7 +405,7 @@ export class Avatar {
     this.oneShot = null
     this.current?.fadeOut(0.1)
     this.current = null
-    const clip = getAssets().clips.get('Death_A')
+    const clip = this.clips.get('Death')
     if (clip) {
       this.deathAction = this.mixer.clipAction(clip)
       this.deathAction.reset()
@@ -687,6 +454,7 @@ export class Avatar {
     if (hex === this.color) return
     this.color = hex
     // одежда от цвета игрока не зависит — перекрашиваем только аксессуары
+    for (const m of this.mats) if (m.userData.player) m.color.setHex(lighten(hex, 0.1))
     this.model.traverse((o) => {
       if (!(o instanceof THREE.SkinnedMesh) && o instanceof THREE.Mesh && /cap|tie|badge/.test(o.parent?.name ?? '') && !o.userData.keep) {
         (o.material as THREE.MeshStandardMaterial).color.setHex(hex)

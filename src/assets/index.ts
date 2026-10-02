@@ -6,19 +6,19 @@ import { GRADE_PALETTE } from '../scene/palette'
 import furnitureUrl from './furniture.glb?url'
 import kitchenUrl from './kitchen.glb?url'
 import protoUrl from './proto.glb?url'
-import animsUrl from './char_anims.glb?url'
-import knightUrl from './char_knight.glb?url'
-import barbarianUrl from './char_barbarian.glb?url'
-import mageUrl from './char_mage.glb?url'
-import rogueUrl from './char_rogue.glb?url'
+import bossUrl from './office_boss.glb?url'
+import courierUrl from './office_courier.glb?url'
+import accountantUrl from './office_accountant.glb?url'
+import secretaryUrl from './office_secretary.glb?url'
+import type { CharacterId } from '../config/game'
 
 export type PackName = 'furniture' | 'kitchen' | 'proto'
-export type BaseChar = 'knight' | 'barbarian' | 'mage' | 'rogue'
-
 export interface Assets {
   packs: Record<PackName, Map<string, THREE.Object3D>>
-  chars: Record<BaseChar, GLTF>
-  clips: Map<string, THREE.AnimationClip>
+  /** офисные персонажи (Quaternius) */
+  chars: Record<CharacterId, GLTF>
+  /** анимации для каждого персонажа: у мужчин — из файла босса, у женщин — бухгалтерши (скелет общий) */
+  clips: Record<CharacterId, Map<string, THREE.AnimationClip>>
 }
 
 let assets: Assets | null = null
@@ -35,10 +35,10 @@ export function getAssets(): Assets {
 export async function loadAssets(onProgress: (p: number) => void): Promise<Assets> {
   const loader = new GLTFLoader()
   loader.setMeshoptDecoder(MeshoptDecoder)
-  const urls = [furnitureUrl, kitchenUrl, protoUrl, animsUrl, knightUrl, barbarianUrl, mageUrl, rogueUrl]
+  const urls = [furnitureUrl, kitchenUrl, protoUrl, bossUrl, courierUrl, accountantUrl, secretaryUrl]
   let done = 0
   const load = (u: string) => loader.loadAsync(u).then((g) => { onProgress(++done / urls.length); return g })
-  const [furniture, kitchen, proto, anims, knight, barbarian, mage, rogue] = await Promise.all(urls.map(load))
+  const [furniture, kitchen, proto, boss, courier, accountant, secretary] = await Promise.all(urls.map(load))
 
   const pack = (g: GLTF): Map<string, THREE.Object3D> => {
     const map = new Map<string, THREE.Object3D>()
@@ -53,25 +53,12 @@ export async function loadAssets(onProgress: (p: number) => void): Promise<Asset
     return map
   }
 
-  // персонажи — лёгкая цветокоррекция (кожа и волосы остаются живыми)
-  for (const g of [knight, barbarian, mage, rogue]) {
-    g.scene.traverse((o) => {
-      if (!(o instanceof THREE.Mesh)) return
-      const m = o.material as THREE.MeshStandardMaterial
-      m.roughness = 0.85
-      m.metalness = 0
-      if (m.map && !graded.has(m.map)) {
-        graded.add(m.map)
-        m.map.image = gradeImage(m.map.image as CanvasImageSource & { width: number; height: number }, 0.3)
-        m.map.needsUpdate = true
-      }
-    })
-  }
-
+  const men = new Map(boss.animations.map((c) => [c.name, c]))
+  const women = new Map(accountant.animations.map((c) => [c.name, c]))
   assets = {
     packs: { furniture: pack(furniture), kitchen: pack(kitchen), proto: pack(proto) },
-    chars: { knight, barbarian, mage, rogue },
-    clips: new Map(anims.animations.map((c) => [c.name, c])),
+    chars: { boss, courier, accountant, secretary },
+    clips: { boss: men, courier: men, accountant: women, secretary: women },
   }
   return assets
 }

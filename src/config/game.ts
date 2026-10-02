@@ -101,7 +101,7 @@ export interface WeaponDef {
   ammo?: number // патроны; кончились — снова нож
   backstabMultiplier?: number
   effects: Effect[]
-  clip: string // анимация атаки из пака KayKit
+  clip: string // анимация атаки из пака Quaternius
   animSpeed: number
 }
 
@@ -114,34 +114,34 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     id: 'cutter', name: 'Резак', type: 'melee',
     range: 1.0, damage: 22, cooldown: 0.4, windup: 0.08, arc: 80, backstabMultiplier: 2,
     effects: [{ kind: 'bleed', seconds: 10, dps: 2 }],
-    clip: '1H_Melee_Attack_Stab', animSpeed: 1.8,
+    clip: 'Punch_Right', animSpeed: 2.2,
   },
   // дальний бой 10 м: очередь скоб, средний урон, кровотечение 5 с, магазин 12
   stapler: {
     id: 'stapler', name: 'Степлер', type: 'ranged',
     range: 10, damage: 12, cooldown: 0.24, windup: 0, spread: 5, speed: 24, ammo: 12,
     effects: [{ kind: 'bleed', seconds: 5, dps: 1.5 }],
-    clip: '1H_Ranged_Shoot', animSpeed: 2.2,
+    clip: 'Gun_Shoot', animSpeed: 2.4,
   },
   // ближний бой 2 м: слабый урон, широкий размах, замедляет на 5 с и отталкивает
   mop: {
     id: 'mop', name: 'Швабра', type: 'melee',
     range: 2.0, damage: 14, cooldown: 0.75, windup: 0.18, arc: 150,
     effects: [{ kind: 'slow', seconds: 5, factor: 0.55 }, { kind: 'knockback', force: 9 }],
-    clip: '2H_Melee_Attack_Slice', animSpeed: 1.5,
+    clip: 'Sword_Slash', animSpeed: 1.5,
   },
   // вплотную (1 м): сильный удар с заметным замахом, оглушает на 2 с
   lamp: {
     id: 'lamp', name: 'Настольная лампа', type: 'melee',
     range: 1.0, damage: 5, cooldown: 1.2, windup: 0.42, arc: 100,
     effects: [{ kind: 'stun', seconds: 2 }],
-    clip: '2H_Melee_Attack_Chop', animSpeed: 1.3,
+    clip: 'Sword_Slash', animSpeed: 0.95,
   },
   // 5 м: веер купюр почти без урона — главное, выбивает оружие из рук на 2 с
   moneygun: {
     id: 'moneygun', name: 'Деньгомёт', type: 'ranged',
     range: 5, damage: 2, cooldown: 0.9, windup: 0, pellets: 7, spread: 32, speed: 15, ammo: 6,
     effects: [{ kind: 'disarm', seconds: 2 }],
-    clip: '1H_Ranged_Shoot', animSpeed: 1.6,
+    clip: 'Gun_Shoot', animSpeed: 1.0,
   },
 }

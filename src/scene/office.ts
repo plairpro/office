@@ -217,6 +217,8 @@ export function buildOffice(): Office {
     p.put('furniture', `cactus_medium_${n}`, x, z, rand() * 6)
   }
 
+  details(b)
+
   const group = b.build()
   group.add(p.group)
   return {
@@ -489,6 +491,15 @@ function desk(b: StaticBuilder, p: Placer, x: number, z: number, rot: number): v
       b.box(0.06, 0.14, 0.04, nx, top, nz, 'metal', C.frame, { rotY: face })
       const [kx, kz] = at(lx, side * 0.42)
       b.rbox(0.42, 0.02, 0.14, 0.008, kx, top, kz, 'plastic', C.white, { rotY: face })
+      // мелочи рабочего места: мышь, кружка, бумаги, стикеры на мониторе
+      const [mox, moz] = at(lx + 0.3, side * 0.42)
+      b.rbox(0.06, 0.025, 0.1, 0.012, mox, top, moz, 'plastic', C.white, { rotY: face })
+      if (rand() < 0.75) mug(b, ...at(lx - 0.38, side * (0.3 + rand() * 0.15)), top)
+      if (rand() < 0.6) papers(b, ...at(lx + 0.05 + rand() * 0.2, side * 0.62), top, face + (rand() - 0.5) * 0.4)
+      if (rand() < 0.5) {
+        const [px, pz] = at(lx + 0.27, side * 0.095)
+        b.box(0.07, 0.07, 0.006, px, top + 0.22 + rand() * 0.1, pz, 'matte', [MV.mustard, MV.blush, MV.mint][Math.floor(rand() * 3)], { rotY: face, rotZ: (rand() - 0.5) * 0.4 })
+      }
       // стул
       const [cx, cz] = at(lx + (rand() - 0.5) * 0.2, side * 1.05)
       p.put('furniture', 'chair_C', cx, cz, face + Math.PI + (rand() - 0.5) * 0.5, { collide: false })
@@ -502,6 +513,11 @@ function desk(b: StaticBuilder, p: Placer, x: number, z: number, rot: number): v
     const [bx, bz] = at(-1.2, (rand() - 0.5) * 0.4)
     p.put('furniture', 'book_set', bx, bz, rot + rand(), { y: top + 0.18 * 0.72, scale: 0.8, collide: false })
   }
+  // стакан с ручками и телефон
+  pens(b, ...at(-0.95, 0.25), top)
+  if (rand() < 0.7) deskPhone(b, ...at(0.95, -0.3), top, rot)
+  // мусорка у торца
+  bin(b, ...at(1.6, 0.45 * (rand() < 0.5 ? -1 : 1)))
   if (rand() < 0.5) {
     const [cx, cz] = at(0, (rand() - 0.5) * 0.3)
     p.put('furniture', rand() < 0.5 ? 'cactus_small_A' : 'cactus_small_B', cx, cz, rand() * 6, { y: top, collide: false })
@@ -593,4 +609,182 @@ function elevator(b: StaticBuilder, x: number, z: number, rot: number): Spawn {
   b.rbox(2.2, 0.015, 1.2, 0.05, fx + dx * 0.75, 0, fz + dz * 0.75, 'fabric', 0x9aa3cf, { rotY: rot })
   b.blocker(fx, fz, Math.abs(px) * 2.2 + Math.abs(dx) * 0.4, Math.abs(pz) * 2.2 + Math.abs(dz) * 0.4)
   return { x: fx + dx * 1.6, z: fz + dz * 1.6, rot }
+}
+
+// ======================= детали: чтобы офис выглядел обжитым =======================
+
+function mug(b: StaticBuilder, x: number, z: number, y: number): void {
+  const c = [MV.coral, MV.teal, MV.mustard, MV.white, MV.lavender][Math.floor(rand() * 5)]
+  b.cylinder(0.045, 0.04, 0.1, x, y, z, 'plastic', c, { segments: 12 })
+  b.cylinder(0.038, 0.038, 0.004, x, y + 0.09, z, 'matte', 0x6b4636, { segments: 12 }) // кофе
+  const h = new THREE.TorusGeometry(0.028, 0.009, 5, 10)
+  h.rotateY(rand() * 6)
+  b.geo(h, x + 0.045, y + 0.05, z, 'plastic', c)
+}
+
+function papers(b: StaticBuilder, x: number, z: number, y: number, rot: number): void {
+  const n = 1 + Math.floor(rand() * 4)
+  for (let i = 0; i < n; i++) {
+    b.box(0.21, 0.004, 0.29, x + (rand() - 0.5) * 0.03, y + i * 0.005, z + (rand() - 0.5) * 0.03, 'matte', MV.white, { rotY: rot + (rand() - 0.5) * 0.25 })
+  }
+}
+
+function pens(b: StaticBuilder, x: number, z: number, y: number): void {
+  b.cylinder(0.035, 0.035, 0.1, x, y, z, 'metal', MV.indigo, { segments: 10 })
+  for (let i = 0; i < 3; i++) {
+    b.box(0.008, 0.14, 0.008, x + (rand() - 0.5) * 0.03, y + 0.05, z + (rand() - 0.5) * 0.03, 'plastic', [MV.coral, MV.teal, MV.indigoDeep][i], { rotX: (rand() - 0.5) * 0.4, rotZ: (rand() - 0.5) * 0.4 })
+  }
+}
+
+function deskPhone(b: StaticBuilder, x: number, z: number, y: number, rot: number): void {
+  b.rbox(0.18, 0.05, 0.16, 0.02, x, y, z, 'plastic', MV.indigoDeep, { rotY: rot })
+  b.rbox(0.05, 0.035, 0.17, 0.015, x - 0.06, y + 0.05, z, 'plastic', MV.indigoDeep, { rotY: rot })
+  b.box(0.07, 0.004, 0.05, x + 0.03, y + 0.052, z, 'light', 0xbfe3ff, { rotY: rot })
+}
+
+function bin(b: StaticBuilder, x: number, z: number): void {
+  b.cylinder(0.16, 0.13, 0.34, x, 0, z, 'metal', MV.lavender, { segments: 14 })
+  b.cylinder(0.14, 0.14, 0.01, x, 0.3, z, 'matte', MV.white, { segments: 14 }) // смятая бумага
+  b.sphere(0.06, x + 0.03, 0.33, z - 0.02, 'matte', MV.white)
+}
+
+/** Огнетушитель у стены */
+function extinguisher(b: StaticBuilder, x: number, z: number): void {
+  b.cylinder(0.08, 0.08, 0.42, x, 0.02, z, 'plastic', 0xd94a4a, { segments: 12 })
+  b.sphere(0.08, x, 0.44, z, 'plastic', 0xd94a4a, 1, 0.6, 1)
+  b.box(0.05, 0.08, 0.05, x, 0.48, z, 'metal', MV.indigoDeep)
+  b.box(0.12, 0.02, 0.03, x + 0.04, 0.56, z, 'metal', MV.indigoDeep)
+}
+
+/** Часы на стене. nx, nz — куда смотрит стена (наружу в комнату) */
+function wallClock(b: StaticBuilder, x: number, y: number, z: number, rotY: number): void {
+  const g = new THREE.CylinderGeometry(0.26, 0.26, 0.05, 28)
+  g.rotateX(Math.PI / 2)
+  b.geo(g, x, y, z, 'plastic', MV.indigo, { rotY })
+  const f = new THREE.CylinderGeometry(0.22, 0.22, 0.02, 28)
+  f.rotateX(Math.PI / 2)
+  const dx = Math.sin(rotY) * 0.02, dz = Math.cos(rotY) * 0.02
+  b.geo(f, x + dx, y, z + dz, 'matte', MV.white, { rotY })
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2
+    const lx = Math.cos(a) * 0.18, ly = Math.sin(a) * 0.18
+    b.box(0.015, i % 3 ? 0.025 : 0.05, 0.01, x + Math.cos(rotY) * lx + dx * 1.6, y + ly, z - Math.sin(rotY) * lx + dz * 1.6, 'matte', MV.indigoDeep, { rotY })
+  }
+  b.box(0.018, 0.13, 0.01, x + dx * 2, y + 0.05, z + dz * 2, 'matte', MV.indigoDeep, { rotY }) // часовая
+  b.box(0.1, 0.012, 0.01, x + Math.cos(rotY) * 0.05 + dx * 2.2, y, z - Math.sin(rotY) * 0.05 + dz * 2.2, 'matte', MV.coral, { rotY }) // минутная
+}
+
+/** Маркерная доска с графиком роста (столбики + стрелка вверх) */
+function whiteboard(b: StaticBuilder, x: number, y: number, z: number, rotY: number, w = 1.6): void {
+  b.rbox(w + 0.08, 0.98, 0.04, 0.02, x, y - 0.49, z, 'metal', MV.lilac, { rotY })
+  const dx = Math.sin(rotY) * 0.025, dz = Math.cos(rotY) * 0.025
+  b.box(w, 0.9, 0.01, x + dx, y - 0.45, z + dz, 'matte', MV.white, { rotY })
+  const c = Math.cos(rotY), s = Math.sin(rotY)
+  const bars = [0.18, 0.3, 0.26, 0.45, 0.6]
+  bars.forEach((h, i) => {
+    const lx = -w / 2 + 0.25 + i * 0.22
+    b.box(0.12, h, 0.01, x + c * lx + dx * 1.5, y - 0.85, z - s * lx + dz * 1.5, 'matte', [MV.teal, MV.coral, MV.mustard, MV.lavender, MV.teal][i], { rotY })
+  })
+  // стикеры справа
+  for (let i = 0; i < 6; i++) {
+    const lx = w / 2 - 0.42 + (i % 3) * 0.13, ly = -0.25 - Math.floor(i / 3) * 0.14
+    b.box(0.1, 0.1, 0.01, x + c * lx + dx * 1.5, y + ly - 0.05, z - s * lx + dz * 1.5, 'matte', [MV.mustard, MV.blush, MV.mint][i % 3], { rotY, rotZ: (rand() - 0.5) * 0.3 })
+  }
+  // полочка с маркерами
+  b.box(w * 0.6, 0.03, 0.08, x + dx * 2, y - 0.98, z + dz * 2, 'metal', MV.lilac, { rotY })
+}
+
+/** Рамка с «картиной»: простая абстракция из кругов и плашек */
+function frame(b: StaticBuilder, x: number, y: number, z: number, rotY: number, w: number, h: number, a: number, c2: number): void {
+  b.box(w, h, 0.03, x, y - h / 2, z, 'darkwood', 0xffffff, { rotY })
+  const dx = Math.sin(rotY) * 0.02, dz = Math.cos(rotY) * 0.02
+  b.box(w - 0.08, h - 0.08, 0.01, x + dx, y - h / 2 + 0.04, z + dz, 'matte', MV.creamLight, { rotY })
+  const g = new THREE.CircleGeometry(Math.min(w, h) * 0.25, 24)
+  g.rotateY(0)
+  b.geo(g, x + dx * 1.6, y - h * 0.42, z + dz * 1.6, 'matte', a, { rotY })
+  b.box(w * 0.6, h * 0.12, 0.005, x + dx * 1.5, y - h * 0.82, z + dz * 1.5, 'matte', c2, { rotY })
+}
+
+/** Принтер с лотком и стопкой бумаги */
+function printer(b: StaticBuilder, x: number, z: number, rotY: number): void {
+  b.rbox(0.8, 0.75, 0.6, 0.04, x, 0, z, 'plastic', MV.creamLight, { rotY, collide: true })
+  b.rbox(0.7, 0.22, 0.52, 0.04, x, 0.75, z, 'plastic', MV.indigo, { rotY })
+  b.box(0.28, 0.04, 0.2, x, 0.98, z, 'plastic', MV.indigoDeep, { rotY })
+  b.box(0.21, 0.03, 0.29, x + 0.12, 0.76, z, 'matte', MV.white, { rotY })
+  b.box(0.05, 0.02, 0.02, x - 0.25, 0.98, z, 'light', 0x9dffc9, { rotY })
+}
+
+/** Шкаф для документов с ящиками */
+function cabinet(b: StaticBuilder, x: number, z: number, rotY: number): void {
+  b.rbox(0.5, 1.1, 0.55, 0.03, x, 0, z, 'metal', MV.lilac, { rotY, collide: true })
+  const dx = Math.sin(rotY) * 0.28, dz = Math.cos(rotY) * 0.28
+  for (let i = 0; i < 3; i++) {
+    b.box(0.42, 0.3, 0.01, x + dx, 0.08 + i * 0.34, z + dz, 'metal', MV.lavender, { rotY })
+    b.box(0.14, 0.025, 0.03, x + dx * 1.08, 0.3 + i * 0.34, z + dz * 1.08, 'chrome', MV.white, { rotY })
+  }
+  papers(b, x, z, 1.1, rotY + 0.2)
+}
+
+/** Жёлтая табличка «осторожно, мокрый пол» */
+function wetSign(b: StaticBuilder, x: number, z: number, rotY: number): void {
+  for (const k of [-1, 1]) b.box(0.3, 0.6, 0.015, x + Math.sin(rotY) * k * 0.08, 0, z + Math.cos(rotY) * k * 0.08, 'plastic', MV.mustard, { rotY, rotX: k * 0.25 })
+}
+
+/** Кофемашина на столешнице */
+function coffeeMachine(b: StaticBuilder, x: number, y: number, z: number, rotY: number): void {
+  b.rbox(0.32, 0.4, 0.36, 0.04, x, y, z, 'chrome', MV.indigoDeep, { rotY })
+  b.rbox(0.26, 0.06, 0.12, 0.02, x + Math.sin(rotY) * 0.17, y + 0.3, z + Math.cos(rotY) * 0.17, 'plastic', MV.indigo, { rotY })
+  mug(b, x + Math.sin(rotY) * 0.15, z + Math.cos(rotY) * 0.15, y + 0.02)
+}
+
+function details(b: StaticBuilder): void {
+  const wallN = -D + 0.26, wallW = -W + 0.26
+  // север: часы над рабочей зоной, доска с графиком и картины между окнами
+  wallClock(b, -1.44, 2.25, wallN, 0)
+  whiteboard(b, 7.2, 2.0, wallN, 0, 1.8)
+  frame(b, -1.44 - 0.75, 1.75, wallN, 0, 0.55, 0.7, MV.coral, MV.teal)
+  frame(b, -1.44 + 0.75, 1.75, wallN, 0, 0.55, 0.7, MV.teal, MV.mustard)
+  frame(b, -10.08, 1.9, wallN, 0, 1.0, 0.6, MV.mustard, MV.lavender) // в переговорке
+  // запад: доска у рабочего места «Запад», часы, картина
+  whiteboard(b, wallW, 1.95, 2.88, Math.PI / 2, 1.4)
+  wallClock(b, wallW, 2.2, -8.64, Math.PI / 2)
+  frame(b, wallW, 1.8, 0, Math.PI / 2, 0.6, 0.8, MV.lavender, MV.coral)
+  // принтер и шкафы у стены
+  printer(b, 8.7, -12.3, 0)
+  cabinet(b, -4.6, -12.45, 0)
+  cabinet(b, -4.05, -12.45, 0)
+  cabinet(b, -13.95, 1.9, Math.PI / 2)
+  // огнетушители у каждого лифта
+  extinguisher(b, -7.2 + 1.35, -D + 0.35)
+  extinguisher(b, 7.2 - 1.35, D - 0.35)
+  extinguisher(b, W - 0.35, -5.76 - 1.35)
+  extinguisher(b, -W + 0.35, 5.76 + 1.35)
+  // кабинет босса: ноутбук, табличка, бумаги, кубок
+  b.rbox(0.36, 0.02, 0.25, 0.01, 12, 0.69, -11.15, 'metal', MV.indigo)
+  b.rbox(0.36, 0.24, 0.015, 0.01, 12, 0.7, -11.28, 'metal', MV.indigo, { rotX: -0.25 })
+  b.box(0.3, 0.17, 0.004, 12, 0.73, -11.26, 'screen', 0xffffff, { rotX: -0.25 })
+  b.box(0.3, 0.06, 0.05, 12, 0.69, -10.75, 'darkwood', 0xffffff, { rotX: 0.4 })
+  b.box(0.24, 0.035, 0.005, 12, 0.715, -10.725, 'metal', MV.mustard, { rotX: 0.4 })
+  papers(b, 12.7, -11.2, 0.69, 0.3)
+  mug(b, 11.4, -11.3, 0.69)
+  b.cylinder(0.05, 0.08, 0.06, 13.2, 0.69, -11.3, 'chrome', MV.mustard)
+  b.cylinder(0.02, 0.02, 0.1, 13.2, 0.75, -11.3, 'chrome', MV.mustard)
+  b.cylinder(0.1, 0.04, 0.14, 13.2, 0.85, -11.3, 'chrome', MV.mustard)
+  // переговорка: ноутбук и стаканы
+  for (const [x, z] of [[-12.8, -11.3], [-11.8, -10.5]] as const) {
+    b.rbox(0.32, 0.02, 0.22, 0.01, x, 0.57, z, 'metal', MV.lilac)
+    mug(b, x + 0.3, z + 0.1, 0.57)
+  }
+  // туалеты: «мокрый пол»
+  wetSign(b, -11.2, 8.4, 0.5)
+  // кухня: кофемашина и микроволновка на столешнице
+  coffeeMachine(b, W - 0.7, 0.92, 8.6 + 2.4, -Math.PI / 2)
+  b.rbox(0.5, 0.3, 0.36, 0.03, W - 0.65, 0.92, 8.6 + 2.95, 'plastic', MV.white, { rotY: -Math.PI / 2 })
+  b.box(0.01, 0.2, 0.3, W - 0.85, 0.97, 8.6 + 2.9, 'glass', 0x333344)
+  // серверная: кабели по полу
+  for (let i = 0; i < 4; i++) b.box(0.03, 0.02, 4.2, 12.6 + i * 0.07, 0.01, 1.3, 'plastic', [MV.teal, MV.coral, MV.mustard, MV.indigo][i])
+  // лаунж: журналы на столике
+  for (let i = 0; i < 3; i++) b.box(0.22, 0.01, 0.3, -5.4 + (i - 1) * 0.18, 0.37 + i * 0.012, 10 + (rand() - 0.5) * 0.1, 'matte', [MV.coral, MV.sky, MV.mustard][i], { rotY: rand() - 0.5 })
+  // теннис: вторая ракетка
+  b.rbox(0.16, 0.02, 0.26, 0.01, 2.4, 0.75, 10.9, 'paint', MV.teal, { rotY: -0.8 })
 }
