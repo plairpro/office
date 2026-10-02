@@ -63,6 +63,46 @@ function lighten(hex: number, k: number): number {
 }
 
 /**
+ * Брови в цвет волос: у модели глаза и брови — один материал «Face». Делим сетку на куски —
+ * верхние (брови) красим в цвет волос, нижние (глаза) остаются тёмными.
+ */
+function paintBrows(g: THREE.BufferGeometry, eyes: number, hair: number): void {
+  if (g.userData.brows === hair) return
+  g.userData.brows = hair
+  // куски сетки (два глаза, две брови) — объединяем вершины по треугольникам и совпадающим позициям
+  const pos = g.attributes.position, idx = g.index
+  const parent = Array.from({ length: pos.count }, (_, i) => i)
+  const find = (a: number): number => { while (parent[a] !== a) a = parent[a] = parent[parent[a]]; return a }
+  const join = (a: number, b: number) => { parent[find(a)] = find(b) }
+  const key = new Map<string, number>()
+  for (let i = 0; i < pos.count; i++) {
+    const k = `${pos.getX(i).toFixed(4)},${pos.getY(i).toFixed(4)},${pos.getZ(i).toFixed(4)}`
+    const o = key.get(k)
+    if (o === undefined) key.set(k, i); else join(i, o)
+  }
+  const n = idx ? idx.count : pos.count
+  for (let t = 0; t < n; t += 3) {
+    const a = idx ? idx.getX(t) : t
+    join(a, idx ? idx.getX(t + 1) : t + 1); join(a, idx ? idx.getX(t + 2) : t + 2)
+  }
+  const sum = new Map<number, { y: number; n: number }>()
+  for (let i = 0; i < pos.count; i++) {
+    const r = find(i), e = sum.get(r) ?? { y: 0, n: 0 }
+    e.y += pos.getY(i); e.n++; sum.set(r, e)
+  }
+  // брови — куски выше середины между самым низким и самым высоким куском
+  const means = [...sum.values()].map((e) => e.y / e.n)
+  const mid = (Math.min(...means) + Math.max(...means)) / 2
+  const ce = new THREE.Color(eyes), ch = new THREE.Color(hair)
+  const col = new Float32Array(pos.count * 3)
+  for (let i = 0; i < pos.count; i++) {
+    const e = sum.get(find(i))!
+    ;(e.y / e.n > mid ? ch : ce).toArray(col, i * 3)
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3))
+}
+
+/**
  * Обувь: вершины «кожи», которые двигают кости стоп и голеней, красим в цвет обуви (цвет вершин).
  * Геометрия общая у всех копий персонажа — считаем один раз.
  */
@@ -223,6 +263,11 @@ export class Avatar {
         cache.set(src.name, m)
       }
       o.material = m
+      if (src.name === 'Face' && typeof look.paint.Hair === 'number') {
+        paintBrows(o.geometry, EYES, look.paint.Hair)
+        m.vertexColors = true
+        m.color.setHex(0xffffff)
+      }
       if (src.name === 'Skin' && o instanceof THREE.SkinnedMesh) {
         paintShoes(o, look.shoes)
         m.vertexColors = true
