@@ -8,7 +8,9 @@ export class Input {
   hasMouse = false
   /** последний ввод был пальцем — целимся автоматически */
   touchMode = false
-  private attackBtn = false
+  /** правый стик атаки: куда тянешь — туда целишься; null — не целимся */
+  aimStick: { x: number; y: number } | null = null
+  private fireQueue: { aim: { x: number; y: number } | null } | null = null
 
   constructor(private el: HTMLElement) {
     window.addEventListener('keydown', (e) => {
@@ -29,23 +31,72 @@ export class Input {
       this.touchMode = e.pointerType !== 'mouse'
     })
     window.addEventListener('keydown', (e) => { if (!isTyping(e)) this.touchMode = false })
-    // кнопка удара на телефоне — отдельный палец, стик при этом работает
-    const btn = document.getElementById('btn-attack')
-    if (btn) {
-      btn.addEventListener('pointerdown', (e) => { e.preventDefault(); this.attackBtn = true; this.touchMode = true; btn.setPointerCapture(e.pointerId) })
-      const up = () => { this.attackBtn = false }
-      btn.addEventListener('pointerup', up)
-      btn.addEventListener('pointercancel', up)
-      btn.addEventListener('lostpointercapture', up)
-    }
+    this.setupAttackStick()
     window.addEventListener('pointerup', () => { this.mouseDown = false })
     el.addEventListener('contextmenu', (e) => e.preventDefault())
     this.setupStick()
   }
 
-  /** Держит атаку: ЛКМ, пробел или кнопка на экране */
+  /** Держит атаку: ЛКМ или пробел */
   get attacking(): boolean {
-    return this.mouseDown || this.attackBtn || this.keys.has('Space')
+    return this.mouseDown || this.keys.has('Space')
+  }
+
+  /** Забрать удар с правого стика: aim = null — короткий тап (автоприцел), иначе направление на экране */
+  takeFire(): { aim: { x: number; y: number } | null } | null {
+    const f = this.fireQueue
+    this.fireQueue = null
+    return f
+  }
+
+  /** Экранное направление → угол в мире (камера смотрит с юго-востока) */
+  static screenToWorldAngle(v: { x: number; y: number }): number {
+    const s = Math.SQRT1_2
+    return Math.atan2((v.x - v.y) * s, (-v.x - v.y) * s)
+  }
+
+  // --- правый стик: кнопка удара, как в Brawl Stars ---
+  private setupAttackStick(): void {
+    const btn = document.getElementById('btn-attack')
+    const knob = document.getElementById('atk-knob')
+    if (!btn || !knob) return
+    const R = 56, DEAD = 0.3
+    let id: number | null = null
+    let cx = 0, cy = 0
+    let moved = false
+    const set = (e: PointerEvent) => {
+      let dx = e.clientX - cx, dy = e.clientY - cy
+      const d = Math.hypot(dx, dy)
+      if (d > R) { dx = (dx / d) * R; dy = (dy / d) * R }
+      knob.style.transform = `translate(${dx}px, ${dy}px)`
+      const m = Math.hypot(dx, dy) / R
+      if (m > DEAD) moved = true
+      this.aimStick = m > DEAD ? { x: dx / R, y: -dy / R } : moved ? this.aimStick : null
+    }
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault()
+      if (id !== null) return
+      id = e.pointerId
+      this.touchMode = true
+      moved = false
+      const r = btn.getBoundingClientRect()
+      cx = r.left + r.width / 2; cy = r.top + r.height / 2
+      try { btn.setPointerCapture(e.pointerId) } catch { /* синтетические события */ }
+      btn.classList.add('held')
+      set(e)
+    })
+    btn.addEventListener('pointermove', (e) => { if (e.pointerId === id) set(e) })
+    const end = (e: PointerEvent) => {
+      if (e.pointerId !== id) return
+      id = null
+      // отпустил: тянул — удар туда, просто тапнул — удар по ближайшему
+      this.fireQueue = { aim: moved && this.aimStick ? { ...this.aimStick } : null }
+      this.aimStick = null
+      knob.style.transform = ''
+      btn.classList.remove('held')
+    }
+    btn.addEventListener('pointerup', end)
+    btn.addEventListener('pointercancel', end)
   }
 
   // --- сенсорный стик: палец в любом месте экрана = центр стика ---
@@ -60,6 +111,7 @@ export class Input {
     const R = 50
     this.el.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse' || this.stickId !== null) return
+      if (e.clientX > window.innerWidth * 0.6) return // правая часть — для прицела
       this.stickId = e.pointerId
       this.stickOrigin = { x: e.clientX, y: e.clientY }
       ui.style.left = `${e.clientX}px`

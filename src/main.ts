@@ -481,6 +481,32 @@ $('btn-invite').addEventListener('click', () => {
   ;($('btn-invite') as HTMLButtonElement).blur()
 })
 
+// ---------- прицел на полу (телефон: пока тянешь правый стик) ----------
+
+const aimMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide })
+const aimMarker = new THREE.Mesh(new THREE.BufferGeometry(), aimMat)
+aimMarker.renderOrder = 3
+aimMarker.visible = false
+scene.add(aimMarker)
+let aimFor = ''
+
+function updateAimMarker(me: { body: { x: number; z: number }; weapon: WeaponId }, angle: number | null): void {
+  if (angle === null) { aimMarker.visible = false; return }
+  const w = WEAPONS[me.weapon]
+  if (aimFor !== w.id) {
+    aimFor = w.id
+    aimMarker.geometry.dispose()
+    // ближний бой — сектор шириной в размах удара, дальний — полоса с разбросом
+    const arc = ((w.type === 'melee' ? w.arc ?? 90 : Math.max(w.spread ?? 4, 6)) * Math.PI) / 180
+    const g = new THREE.CircleGeometry(w.range + 0.4, 24, Math.PI / 2 - arc / 2, arc)
+    g.rotateX(-Math.PI / 2)
+    aimMarker.geometry = g
+  }
+  aimMarker.visible = true
+  aimMarker.position.set(me.body.x, 0.05, me.body.z)
+  aimMarker.rotation.y = angle - Math.PI
+}
+
 // ---------- цикл ----------
 
 const aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1)
@@ -491,6 +517,7 @@ timer.connect(document)
 let sendAcc = 0
 let fpsAcc = 0, fpsFrames = 0
 let scoreAcc = 0
+let pendingFire: { angle: number | null; t: number } | null = null
 let diagAcc = 0, lastRx = 0
 
 function frame(time: number): void {
@@ -506,7 +533,23 @@ function frame(time: number): void {
       ray.setFromCamera(input.mouseNdc, camera)
       if (ray.ray.intersectPlane(aimPlane, aimPoint)) aim = Math.atan2(aimPoint.x - me.body.x, aimPoint.z - me.body.z)
     }
-    match.update(dt, { move: input.moveDir(), aim, attack: input.attacking, autoAim: input.touchMode })
+    // правый стик: тянешь — целишься (сектор на полу), отпустил — удар; тап — удар по ближайшему
+    const fire = input.takeFire()
+    if (fire) pendingFire = { angle: fire.aim ? Input.screenToWorldAngle(fire.aim) : null, t: 0.35 }
+    if (input.aimStick) aim = Input.screenToWorldAngle(input.aimStick)
+    else if (pendingFire && pendingFire.angle !== null) aim = pendingFire.angle
+    const cdBefore = me.cooldown
+    match.update(dt, {
+      move: input.moveDir(), aim,
+      attack: input.attacking || !!pendingFire,
+      autoAim: !!pendingFire && pendingFire.angle === null,
+    })
+    if (pendingFire) {
+      pendingFire.t -= dt
+      // удар случился (перезарядка выросла) или ждали слишком долго — забываем
+      if (me.cooldown > cdBefore || pendingFire.t <= 0) pendingFire = null
+    }
+    updateAimMarker(me, input.aimStick ? aim : null)
 
     // камера: следует за игроком с небольшим сдвигом к прицелу
     const lead = aim !== null ? GAME.camera.aimLead : 0
