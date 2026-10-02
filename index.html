@@ -21,14 +21,14 @@
     <div id="menu" class="overlay">
       <div class="card">
         <div class="logo">Офис</div>
-        <p class="tagline" id="menu-tagline">Нажми «Войти в офис» — появится твоя комната и ссылка для коллег. Пока они идут, бей манекенов.</p>
+        <p class="tagline" id="menu-tagline">Нажми «Войти» — появится твой офис и ссылка для коллег</p>
         <label class="field">
           <span>Как тебя зовут в офисе?</span>
           <input id="name" maxlength="16" autocomplete="nickname" placeholder="Например, Бухгалтер Света" />
         </label>
         <div class="field"><span>Кем будешь драться?</span></div>
         <div id="chars" class="chars"></div>
-        <button id="btn-main" class="btn cta">Войти в офис</button>
+        <button id="btn-main" class="btn cta">Войти</button>
         <p id="menu-error" class="error" hidden></p>
       </div>
     </div>
@@ -36,7 +36,7 @@
     <!-- HUD -->
     <div id="hud" hidden>
       <div class="panel room">
-        <div class="room-code">Комната <b id="room-code">—</b></div>
+        <div class="room-code">Офис <b id="room-code">—</b></div>
         <ul id="roster"></ul>
         <div id="net-status" class="status"></div>
       </div>
@@ -50,10 +50,10 @@
       <ul id="feed"></ul>
       <div id="invite-card" hidden>
         <button id="ic-close" aria-label="Скрыть">×</button>
-        <div class="ic-title">Комната <b id="ic-code"></b></div>
-        <p>Отправь ссылку коллегам — они сразу окажутся здесь. До 4 человек.</p>
+        <div class="ic-title">Офис <b id="ic-code"></b></div>
+        <p>Отправь эту ссылку коллегам — они окажутся здесь</p>
         <div class="ic-link" id="ic-link"></div>
-        <div class="ic-btns"><button id="ic-copy" class="btn cta">Скопировать ссылку</button><button id="ic-share" class="btn primary">Поделиться</button></div>
+        <div class="ic-btns"><button id="ic-copy" class="btn cta">Скопировать ссылку</button></div>
       </div>
       <div id="death" hidden><b>УВОЛЕН</b><span id="death-sub"></span></div>
       <div id="win" hidden><div class="win-card"><small>Сотрудник месяца</small><b id="win-name"></b><span id="win-sub"></span><small>Новый раунд через несколько секунд</small></div></div>

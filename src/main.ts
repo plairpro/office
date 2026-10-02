@@ -133,7 +133,7 @@ const hooks: MatchHooks = {
 
 function rosterChanged(): void {
   if (!net || !match) return
-  if (net.peers.size > 0) { match.removeDummies(); $('invite-card').hidden = true }
+  if (net.peers.size > 0 && match.fighters.size > net.peers.size + 1) { match.removeDummies(); $('invite-card').hidden = true }
   // цвет и лифт — по номеру лифта игрока (1-й зашедший — лифт 1, 2-й — лифт 2…)
   for (const p of net.ordered()) {
     if (p.slot < 0) continue // ещё выбирает лифт — покажем, как только выберет
@@ -320,8 +320,8 @@ const nameInput = $('name') as HTMLInputElement
 nameInput.value = myName
 const invitedCode = readRoomCode()
 if (invitedCode) {
-  $('menu-tagline').textContent = `Тебя позвали в комнату ${invitedCode}. Залетай!`
-  $('btn-main').textContent = 'Войти в офис'
+  $('menu-tagline').textContent = 'Тебя позвали в офис'
+  $('btn-main').textContent = 'Войти'
 }
 
 async function startGame(code: string | null): Promise<void> {
@@ -410,7 +410,7 @@ function backToMenu(error?: string): void {
   history.replaceState(null, '', location.pathname)
   $('hud').hidden = true
   $('menu').hidden = false
-  $('btn-main').textContent = 'Войти в офис'
+  $('btn-main').textContent = 'Войти'
   $('menu-tagline').textContent = 'Быстрый PvP на 2–4 коллег. Без регистрации.'
   setPreview(myChar)
   const err = $('menu-error')
@@ -425,37 +425,34 @@ function inviteUrl(code: string): string {
   return `${location.href.split('#')[0].split('?')[0]}#${code}`
 }
 
-async function copyInvite(): Promise<void> {
+// одно действие: на телефоне — меню «Поделиться», на компьютере — копируем ссылку
+const canShare = !!navigator.share && window.matchMedia('(pointer: coarse)').matches
+$('ic-copy').textContent = canShare ? 'Отправить ссылку' : 'Скопировать ссылку'
+
+async function sendInvite(): Promise<void> {
   if (!net) return
   const url = inviteUrl(net.code)
+  const text = `${myName} зовёт тебя в «Офис»`
+  if (canShare) {
+    try { await navigator.share({ title: 'Офис', text, url }); return } catch { /* отменили — скопируем */ }
+  }
   try {
-    await navigator.clipboard.writeText(`${myName} зовёт тебя в «Офис» — заходи, будем драться степлерами:\n${url}`)
-    showToast('Ссылка скопирована — кинь её в рабочий чат', 3500)
+    await navigator.clipboard.writeText(`${text}: ${url}`)
+    const b = $('ic-copy')
+    b.textContent = 'Скопировано ✓'
+    setTimeout(() => { b.textContent = canShare ? 'Отправить ссылку' : 'Скопировать ссылку' }, 2000)
+    showToast('Ссылка скопирована — вставь её в чат коллегам', 3000)
   } catch {
     window.prompt('Скопируй ссылку и отправь коллегам:', url)
   }
 }
-$('ic-copy').addEventListener('click', () => void copyInvite())
-$('ic-share').addEventListener('click', () => $('btn-invite').click())
+$('ic-copy').addEventListener('click', () => void sendInvite())
 $('ic-close').addEventListener('click', () => { $('invite-card').hidden = true })
-if (!navigator.share) $('ic-share').hidden = true
-
-$('btn-invite').addEventListener('click', async () => {
-  if (!net) return
-  const url = inviteUrl(net.code)
-  const text = `${myName} вызывает тебя на офисную разборку! Комната ${net.code}`
-  const coarse = window.matchMedia('(pointer: coarse)').matches
-  if (coarse && navigator.share) {
-    try { await navigator.share({ title: 'Офис', text, url }); return } catch { /* отменили */ }
-  }
-  try {
-    await navigator.clipboard.writeText(`${text}\n${url}`)
-    showToast(location.protocol === 'file:'
-      ? 'Это локальный файл: ссылка сработает только на этом компьютере. Открой её во втором окне'
-      : 'Ссылка скопирована — кинь её в рабочий чат', 4500)
-  } catch {
-    window.prompt('Скопируй ссылку и отправь коллегам:', url)
-  }
+// «Позвать коллег» просто открывает ту же карточку
+$('btn-invite').addEventListener('click', () => {
+  const c = $('invite-card')
+  c.hidden = !c.hidden
+  ;($('btn-invite') as HTMLButtonElement).blur()
 })
 
 // ---------- цикл ----------
