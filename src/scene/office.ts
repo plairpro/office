@@ -249,7 +249,7 @@ function centerArena(b: StaticBuilder, p: Placer): { x: number; z: number; radiu
   b.box(sw + 0.3, sy - 0.15, 0.2, 0, 0, -hz, 'paint', MV.coral)
   b.blocker(0, -hz, sw + 0.3, 0.3)
   slide(p, 0, sy + sh / 2, -hz + 0.11, sw, sh)
-  b.rbox(4.4, 0.12, 1.2, 0.05, 0, 0, -hz + 0.8, 'paint', MV.blush) // сцена
+  b.rbox(4.4, 0.025, 1.2, 0.05, 0, 0, -hz + 0.8, 'paint', MV.blush) // ковёр перед экраном (плоский: на высоком помосте ноги уходили «под пол»)
   // юг — стеллаж с папками
   b.rbox(sw, 1.7, 0.45, 0.06, 0, 0, hz, 'paint', MV.creamLight, { collide: true })
   for (let i = 0; i < 8; i++) {

@@ -37,6 +37,7 @@ export interface Fighter {
   maxHp: number
   weapon: WeaponId
   ammo: number // -1 — без счёта
+  uses: number // сколько ещё попаданий выдержит оружие, -1 — вечное
   dead: boolean
   kills: number
   // чужие: куда тянем
@@ -54,6 +55,7 @@ export interface Fighter {
   slow: number
   slowFactor: number
   stun: number
+  stunCd: number // повторно оглушить нельзя, пока не истечёт (иначе лампа держит в стане до смерти)
   disarm: number
   dripAcc: number
   lastBy: string
@@ -240,10 +242,10 @@ export class Match {
     const fighter: Fighter = {
       id, name, character, color, kind, avatar,
       body: { x, z, vx: 0, vz: 0 }, facing: f, hp, maxHp: hp,
-      weapon: 'cutter', ammo: -1, dead: false, kills: 0,
+      weapon: 'cutter', ammo: -1, uses: -1, dead: false, kills: 0,
       target: { x, z, vx: 0, vz: 0 }, lastAt: performance.now(), flags: 0,
       cooldown: 0, respawnIn: 0, invuln: kind === 'local' ? MATCH.spawnProtect : 0,
-      bleed: 0, bleedDps: 0, bleedBy: '', bleedAcc: 0, slow: 0, slowFactor: 1, stun: 0, disarm: 0, dripAcc: 0,
+      bleed: 0, bleedDps: 0, bleedBy: '', bleedAcc: 0, slow: 0, slowFactor: 1, stun: 0, stunCd: 0, disarm: 0, dripAcc: 0,
       lastBy: '', lastW: 'cutter', buzz: 0, turnIn: 2 + Math.random() * 3, home: { x, z, f },
     }
     this.fighters.set(id, fighter)
@@ -317,6 +319,9 @@ export class Match {
     for (const f of this.fighters.values()) {
       if (f.kind === 'remote') this.updateRemote(f, dt)
       else if (f.kind === 'dummy') this.updateDummy(f, dt)
+      // значки над головой (оглушён, кровоточит, замедлен) — видят все
+      const st = f.kind === 'remote' ? f.flags : (f.stun > 0 ? F_STUN : 0) | (f.bleed > 0 ? F_BLEED : 0) | (f.slow > 0 ? F_SLOW : 0)
+      f.avatar.setStatus(f.dead ? 0 : st & (F_STUN | F_BLEED | F_SLOW), this.time)
     }
     this.updatePending(dt)
     this.updateProjectiles(dt)
@@ -423,6 +428,7 @@ export class Match {
     f.slow = Math.max(0, f.slow - dt)
     f.buzz = Math.max(0, f.buzz - dt)
     f.stun = Math.max(0, f.stun - dt)
+    f.stunCd = Math.max(0, f.stunCd - dt)
     f.disarm = Math.max(0, f.disarm - dt)
     if (f.bleed > 0) {
       f.bleed -= dt
@@ -535,7 +541,7 @@ export class Match {
     const r = CHARACTERS[v.character].radius
     const dx = v.body.x - ax, dz = v.body.z - az
     const d = Math.hypot(dx, dz)
-    if (d > w.range + r + 0.3) return null // +0.3 — запас на задержку сети
+    if (d > w.range + r + 0.15) return null // +0.15 — небольшой запас на задержку сети
     const ang = Math.atan2(dx, dz)
     const diff = Math.abs(wrap(ang - a))
     if (d > r + 0.35 && diff > ((w.arc ?? 90) / 2) * DEG + Math.atan2(r, d)) return null
@@ -594,6 +600,17 @@ export class Match {
 
   // ---------- урон (считаем только для своего бойца и своих манекенов) ----------
 
+  /** Попадание засчитано — лампа и швабра изнашиваются и ломаются */
+  private wear(f: Fighter | null | undefined, w: WeaponId): void {
+    if (!f || f.weapon !== w || f.uses <= 0) return
+    if (--f.uses > 0) return
+    this.equip(f, 'cutter')
+    if (f.kind === 'local') {
+      this.fx.floatText(`${WEAPONS[w].name} сломалась!`, f.body.x, 2.3, f.body.z, '#d6455a')
+      sfx.play('empty')
+    }
+  }
+
   private receiveHit(v: Fighter, w: WeaponDef, byId: string, dx: number, dz: number, back: boolean): void {
     if (v.dead || v.invuln > 0) return
     const ch = CHARACTERS[v.character]
@@ -613,7 +630,7 @@ export class Match {
     for (const e of w.effects) {
       if (e.kind === 'bleed') { v.bleed = Math.max(v.bleed, e.seconds); v.bleedDps = e.dps; v.bleedBy = byId }
       else if (e.kind === 'slow') { v.slow = e.seconds; v.slowFactor = e.factor }
-      else if (e.kind === 'stun') v.stun = e.seconds
+      else if (e.kind === 'stun') { if (v.stunCd <= 0) { v.stun = e.seconds; v.stunCd = e.seconds + 1.5 } }
       else if (e.kind === 'disarm') {
         // выбивает оружие из рук: подобранное теряется, и пару секунд нельзя бить даже ножом
         if (v.disarm <= 0) this.fx.floatText(v.weapon !== 'cutter' ? 'Выронил оружие!' : 'Обезоружен!', v.body.x, 2.5, v.body.z, '#9d8fd0')
@@ -625,6 +642,7 @@ export class Match {
       }
     }
     this.hitFx(v, n, dx, dz, back ? 2 : 0, w.id)
+    if (v.kind === 'dummy') this.wear(this.fighters.get(byId), w.id) // по живым — когда жертва подтвердит
     if (v.kind === 'local') {
       this.net?.hurt({ n, dx: round2(dx), dz: round2(dz), w: wIdx, k: back ? 2 : 0, by: byId })
       this.hooks.onLocalHurt(n)
@@ -683,6 +701,7 @@ export class Match {
   }
 
   private headGib(v: Fighter): THREE.Group {
+    if (v.avatar.severed) { const h = v.avatar.severed; v.avatar.severed = null; return h }
     const s = v.avatar.headSize
     const g = new THREE.Group()
     const skin = new THREE.Mesh(new THREE.SphereGeometry(s * 0.42, 14, 10), new THREE.MeshStandardMaterial({ color: v.avatar.skin, roughness: 0.7 }))
@@ -734,6 +753,7 @@ export class Match {
   private equip(f: Fighter, id: WeaponId): void {
     f.weapon = id
     f.ammo = WEAPONS[id].ammo ?? -1
+    f.uses = WEAPONS[id].durability ?? -1
     f.avatar.setWeapon(id)
   }
 
@@ -775,7 +795,7 @@ export class Match {
         me.buzz = MATCH.coffeeBuzz
         this.fx.floatText(healed > 0 ? `+${Math.round(healed)} ☕` : 'Бодрость! ☕', me.body.x, 2.3, me.body.z, '#2f9e6a')
       } else {
-        if (me.weapon === k && (me.ammo < 0 || me.ammo === WEAPONS[k].ammo)) return
+        if (me.weapon === k && me.ammo === (WEAPONS[k].ammo ?? -1) && me.uses === (WEAPONS[k].durability ?? -1)) return
         this.equip(me, k)
         this.fx.floatText(WEAPONS[k].name, me.body.x, 2.3, me.body.z, '#4d4a7d')
       }
@@ -875,6 +895,7 @@ export class Match {
       return
     }
     v.hp = Math.max(0, v.hp - m.n)
+    if (m.by === this.local?.id) this.wear(this.local, w)
     // своё попадание мы уже показали заранее — второй раз кровь не рисуем
     const pt = this.predicted.get(id)
     if (m.by === this.local?.id && pt !== undefined && this.time - pt < 1.2) { this.predicted.delete(id); return }

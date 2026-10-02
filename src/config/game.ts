@@ -99,6 +99,7 @@ export interface WeaponDef {
   spread?: number // разброс в градусах
   speed?: number // скорость снаряда, м/с
   ammo?: number // патроны; кончились — снова нож
+  durability?: number // сколько попаданий выдерживает; сломалось — снова резак
   backstabMultiplier?: number
   effects: Effect[]
   clip: string // анимация атаки из пака Quaternius
@@ -112,7 +113,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   // всегда с собой: вплотную, сильный урон, кровотечение 10 с, двойной урон в спину
   cutter: {
     id: 'cutter', name: 'Резак', type: 'melee',
-    range: 1.0, damage: 22, cooldown: 0.4, windup: 0.08, arc: 80, backstabMultiplier: 2,
+    range: 0.45, damage: 22, cooldown: 0.4, windup: 0.08, arc: 80, backstabMultiplier: 2,
     effects: [{ kind: 'bleed', seconds: 10, dps: 2 }],
     clip: 'SwordSlash', animSpeed: 2.6,
   },
@@ -128,6 +129,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     id: 'mop', name: 'Швабра', type: 'melee',
     range: 2.0, damage: 14, cooldown: 0.75, windup: 0.18, arc: 150,
     effects: [{ kind: 'slow', seconds: 5, factor: 0.55 }, { kind: 'knockback', force: 9 }],
+    durability: 5,
     clip: 'SwordSlash', animSpeed: 1.5,
   },
   // вплотную (1 м): сильный удар с заметным замахом, оглушает на 2 с
@@ -135,6 +137,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     id: 'lamp', name: 'Настольная лампа', type: 'melee',
     range: 1.0, damage: 5, cooldown: 1.2, windup: 0.42, arc: 100,
     effects: [{ kind: 'stun', seconds: 2 }],
+    durability: 3,
     clip: 'SwordSlash', animSpeed: 0.95,
   },
   // 5 м: веер купюр почти без урона — главное, выбивает оружие из рук на 2 с

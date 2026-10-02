@@ -287,7 +287,9 @@ export class Avatar {
     look.accessories(rig, color)
     shoes(rig, look.shoes)
     // гнездо для оружия: в кулаке правой руки, оси — как у модели в стойке (вперёд = +Z)
-    const grip = rig.bone('Fist.R')
+    // центр кулака (кость кисти начинается у запястья — оружие висело бы на запястье)
+    const fist = rig.box('FistR')
+    const grip = fist.isEmpty() ? rig.bone('Fist.R') : fist.getCenter(new THREE.Vector3())
     rig.attach('Fist.R', this.socket, grip)
     this.head = model.getObjectByName('Head') ?? null
 
@@ -374,6 +376,41 @@ export class Avatar {
   showLabel(v: boolean): void { this.label.visible = v }
 
   /** Здоровье 0..1 над головой; null — скрыть */
+  /** Значки состояния над головой: 💫 оглушён, 🩸 кровоточит, 🐌 замедлен (биты как у флагов сети) */
+  private statusSprite: THREE.Sprite | null = null
+  private statusBits = 0
+  setStatus(bits: number, time: number): void {
+    if (bits !== this.statusBits) {
+      this.statusBits = bits
+      const icons = [[2, '💫'], [8, '🩸'], [16, '🐌']].filter(([b]) => bits & (b as number)).map(([, e]) => e as string)
+      if (this.statusSprite) {
+        this.root.remove(this.statusSprite)
+        this.statusSprite.material.map?.dispose()
+        this.statusSprite.material.dispose()
+        this.statusSprite = null
+      }
+      if (icons.length) {
+        const c = document.createElement('canvas')
+        c.width = 64 * icons.length; c.height = 64
+        const g = c.getContext('2d')!
+        g.font = '48px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'
+        g.textAlign = 'center'; g.textBaseline = 'middle'
+        icons.forEach((e, i) => g.fillText(e, 32 + i * 64, 36))
+        const t = new THREE.CanvasTexture(c)
+        t.colorSpace = THREE.SRGBColorSpace
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true }))
+        sp.renderOrder = 12
+        sp.scale.set(0.42 * icons.length, 0.42, 1)
+        this.statusSprite = sp
+        this.root.add(sp)
+      }
+    }
+    // покачиваются над головой; при оглушении — кружатся
+    if (this.statusSprite) {
+      this.statusSprite.position.set(bits & 2 ? Math.sin(time * 6) * 0.12 : 0, this.height + 0.85 + Math.sin(time * 4) * 0.04, bits & 2 ? Math.cos(time * 6) * 0.12 : 0)
+    }
+  }
+
   setHp(frac: number | null): void {
     const show = frac !== null && !this.dead
     this.hpBg.visible = this.hpFg.visible = show && frac > 0
@@ -466,9 +503,61 @@ export class Avatar {
     this.model.updateMatrixWorld(true)
     const p = new THREE.Vector3()
     this.head.getWorldPosition(p)
-    this.head.scale.setScalar(0.001) // вместе с головой исчезают очки, кепка, причёска
+    this.severed = this.bakeHead(p)
+    this.head.scale.setScalar(0.001) // вместе с головой исчезают кепка и причёска
     this.headless = true
     return p
+  }
+
+  /** Отрубленная голова — копия настоящей головы модели (лицо, причёска, кепка), снята в момент смерти */
+  severed: THREE.Group | null = null
+
+  /** Запекает текущую позу головы в статичную сетку, центр — точка p (основание головы) */
+  private bakeHead(p: THREE.Vector3): THREE.Group {
+    const g = new THREE.Group()
+    const head = this.head!
+    const v = new THREE.Vector3()
+    this.model.traverse((o) => {
+      if (!(o instanceof THREE.SkinnedMesh)) return
+      const bi = o.skeleton.bones.indexOf(head as THREE.Bone)
+      if (bi < 0) return
+      const geo = o.geometry, si = geo.attributes.skinIndex, sw = geo.attributes.skinWeight, idx = geo.index
+      const onHead = (i: number) => { let w = 0; for (let k = 0; k < 4; k++) if (si.getComponent(i, k) === bi) w += sw.getComponent(i, k); return w >= 0.5 }
+      const pos: number[] = [], col: number[] = []
+      const ca = geo.attributes.color
+      const n = idx ? idx.count : si.count
+      for (let t = 0; t < n; t += 3) {
+        const ids = [0, 1, 2].map((k) => (idx ? idx.getX(t + k) : t + k))
+        if (!ids.every(onHead)) continue
+        for (const i of ids) {
+          o.getVertexPosition(i, v)
+          v.applyMatrix4(o.matrixWorld).sub(p)
+          pos.push(v.x, v.y, v.z)
+          if (ca) col.push(ca.getX(i), ca.getY(i), ca.getZ(i))
+        }
+      }
+      if (!pos.length) return
+      const bg = new THREE.BufferGeometry()
+      bg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+      if (col.length) bg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3))
+      bg.computeVertexNormals()
+      g.add(new THREE.Mesh(bg, (o.material as THREE.Material).clone()))
+    })
+    // кепка и прочее, что висит на кости головы
+    for (const c of head.children) {
+      if (c instanceof THREE.Bone) continue
+      const copy = c.clone(true)
+      c.matrixWorld.decompose(copy.position, copy.quaternion, copy.scale)
+      copy.position.sub(p)
+      g.add(copy)
+    }
+    // срез шеи
+    const r = this.headSize * 0.18
+    const cut = new THREE.Mesh(new THREE.CircleGeometry(r, 12), new THREE.MeshBasicMaterial({ color: 0xa80d22 }))
+    cut.rotation.x = Math.PI / 2
+    g.add(cut)
+    g.traverse((o) => { o.castShadow = true })
+    return g
   }
 
   /** Точка шеи — для фонтана */
@@ -541,7 +630,7 @@ export class Avatar {
     if (run && this.current === run) run.timeScale = 0.75 + k * 0.45
     this.tick(dt)
     // степлер и деньгомёт всегда смотрят туда же, куда персонаж — так понятно, куда полетит
-    if (this.weaponObj && (this.weaponId === 'stapler' || this.weaponId === 'moneygun')) {
+    if (this.weaponObj && (this.weaponId === 'stapler' || this.weaponId === 'moneygun' || this.weaponId === 'lamp')) {
       this.socket.updateWorldMatrix(true, false)
       this.socket.getWorldQuaternion(this.tmpQ).invert()
       this.model.getWorldQuaternion(this.tmpQ2)

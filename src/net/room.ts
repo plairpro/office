@@ -93,6 +93,7 @@ export class NetRoom {
   private seq = 0
   private seenSets = new Map<string, Set<number>>()
   private lastHeard = new Map<string, number>()
+  private lastSt = new Map<string, number>()
   private timer = 0
   private left = false
   private topic: string
@@ -241,6 +242,10 @@ export class NetRoom {
         break
       }
       case 'st': {
+        // через разные брокеры пакеты приходят вразнобой: старое состояние после нового
+        // «воскрешало» убитого на кадр и откатывало позицию — персонаж дёргался. Берём только свежее
+        if (env.s <= (this.lastSt.get(id) ?? -1)) break
+        this.lastSt.set(id, env.s)
         const s = env.d
         if (this.peers.has(id) && Array.isArray(s) && s.length === STATE_LEN && s.every(num)) this.ev.onPeerState(id, s as StatePacket)
         break
@@ -263,6 +268,7 @@ export class NetRoom {
   private drop(id: string, why = ''): void {
     if (this.peers.has(id)) this.stats.drops.push(`${new Date().toLocaleTimeString()} ${this.peers.get(id)?.name}: ${why}`)
     this.lastHeard.delete(id)
+    this.lastSt.delete(id)
     this.seenSets.delete(id)
     if (this.peers.delete(id)) this.ev.onPeerLeave(id)
   }
