@@ -432,3 +432,17 @@ html, body {
   #invite-card p { display: none; }
   #invite-card .ic-title b { font-size: 18px; }
 }
+
+/* Вход по коду */
+.join-row { display: flex; gap: 8px; }
+.join-row input {
+  flex: 1; min-width: 0; font: 600 16px ui-monospace, Menlo, monospace; letter-spacing: 3px; text-transform: uppercase;
+  color: var(--text); background: var(--field); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; outline: none;
+  -webkit-user-select: text; user-select: text;
+}
+.join-row input:focus { border-color: var(--accent); }
+.join-row input::placeholder { letter-spacing: 0; font-family: system-ui, sans-serif; font-weight: 400; }
+.join-row .btn { padding: 10px 18px; }
+@media (max-height: 560px) {
+  #menu .join-row, #menu #btn-create { grid-column: 1; }
+}

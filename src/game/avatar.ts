@@ -637,7 +637,7 @@ function makeLabel(text: string, color: number): THREE.Sprite {
   canvas.height = 48 * S
   const ctx = canvas.getContext('2d')!
   ctx.scale(S, S)
-  ctx.font = '500 22px system-ui, -apple-system, "Segoe UI", sans-serif'
+  ctx.font = '600 22px system-ui, -apple-system, "Segoe UI", sans-serif'
   const tw = Math.min(ctx.measureText(text).width, 200)
   const dot = 7, gap = 9
   const x0 = (256 - (tw + dot * 2 + gap)) / 2
@@ -660,7 +660,9 @@ function makeLabel(text: string, color: number): THREE.Sprite {
   const tex = new THREE.CanvasTexture(canvas)
   tex.colorSpace = THREE.SRGBColorSpace
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }))
-  sprite.scale.set(1.9, 0.36, 1)
+  // на телефоне экран маленький — подписи крупнее
+  const k = window.matchMedia('(pointer: coarse)').matches ? 1.3 : 1
+  sprite.scale.set(1.9 * k, 0.36 * k, 1)
   sprite.renderOrder = 10
   return sprite
 }

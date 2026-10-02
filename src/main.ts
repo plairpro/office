@@ -320,11 +320,29 @@ setPreview(myChar)
 let myName = loadName()
 const nameInput = $('name') as HTMLInputElement
 nameInput.value = myName
-const invitedCode = readRoomCode()
-if (invitedCode) {
-  $('menu-tagline').textContent = 'Тебя позвали в офис'
-  $('btn-main').textContent = 'Войти'
+/**
+ * Меню в двух видах:
+ * — пришёл по ссылке: «Тебя позвали в офис ABCD», большая кнопка «Войти», внизу «Создать свой офис»;
+ * — открыл сам: большая кнопка «Создать офис», ниже поле «Код офиса» + «Войти».
+ */
+function setMenuMode(code: string | null): void {
+  $('menu-tagline').textContent = code
+    ? `Тебя позвали в офис ${code}`
+    : 'Создай офис и позови коллег по ссылке — или войди по коду'
+  $('btn-main').textContent = code ? 'Войти' : 'Создать офис'
+  $('join-row').hidden = !!code
+  $('btn-create').hidden = !code
 }
+setMenuMode(readRoomCode())
+const joinCode = $('join-code') as HTMLInputElement
+joinCode.addEventListener('input', () => { joinCode.value = joinCode.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })
+$('btn-join').addEventListener('click', () => {
+  const c = joinCode.value.trim().toUpperCase()
+  if (c.length < 4) { joinCode.focus(); showToast('Введи код офиса — 4 буквы или цифры из ссылки', 2500); return }
+  void startGame(c)
+})
+joinCode.addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-join').click() })
+$('btn-create').addEventListener('click', () => void startGame(makeRoomCode()))
 
 async function startGame(code: string | null): Promise<void> {
   myName = nameInput.value.trim().slice(0, 16) || 'Стажёр'
@@ -412,8 +430,7 @@ function backToMenu(error?: string): void {
   history.replaceState(null, '', location.pathname)
   $('hud').hidden = true
   $('menu').hidden = false
-  $('btn-main').textContent = 'Войти'
-  $('menu-tagline').textContent = 'Быстрый PvP на 2–4 коллег. Без регистрации.'
+  setMenuMode(null)
   setPreview(myChar)
   const err = $('menu-error')
   err.hidden = !error

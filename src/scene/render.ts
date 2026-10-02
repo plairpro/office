@@ -9,6 +9,9 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 
 export type Quality = 'low' | 'medium' | 'high'
 
+/** Слой для плоских эффектов: основная камера его видит, камера затенения — нет */
+export const FX_LAYER = 1
+
 const PRESETS: Record<Quality, { pixelRatio: number; shadow: number; post: boolean; ao: boolean }> = {
   low: { pixelRatio: 1, shadow: 1024, post: false, ao: false },
   medium: { pixelRatio: 1.5, shadow: 2048, post: true, ao: false },
@@ -31,9 +34,11 @@ export class Renderer {
   readonly sun: THREE.DirectionalLight
   private composer: EffectComposer | null = null
   private gtao: GTAOPass | null = null
+  private aoCamera = new THREE.PerspectiveCamera()
   private quality: Quality = 'high'
 
   constructor(host: HTMLElement, private camera: THREE.PerspectiveCamera, sunDir: THREE.Vector3) {
+    camera.layers.enable(FX_LAYER)
     const r = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' })
     r.shadowMap.enabled = true
     r.shadowMap.type = THREE.PCFShadowMap
@@ -96,7 +101,8 @@ export class Renderer {
       const c = new EffectComposer(r, rt)
       c.addPass(new RenderPass(this.scene, this.camera))
       if (p.ao) {
-        const gtao = new GTAOPass(this.scene, this.camera, w, h)
+        // у затенения своя камера: она не видит слой FX_LAYER (подписи, цифры урона, свечения, пятна)
+        const gtao = new GTAOPass(this.scene, this.aoCamera, w, h)
         gtao.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.4, thickness: 1.2, scale: 1, samples: 16, distanceFallOff: 1 })
         gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 })
         gtao.blendIntensity = 0.9
@@ -122,6 +128,16 @@ export class Renderer {
   }
 
   render(): void {
+    if (this.gtao) {
+      // плоские картинки — на отдельный слой, иначе под ними появляются тёмные прямоугольники
+      this.scene.traverse((o) => {
+        const m = (o as THREE.Mesh).material as THREE.Material | undefined
+        if ((o as THREE.Sprite).isSprite || (m && !Array.isArray(m) && m.transparent && !m.depthWrite)) o.layers.set(FX_LAYER)
+      })
+      const cam = this.camera as THREE.PerspectiveCamera
+      this.aoCamera.copy(cam)
+      this.aoCamera.layers.set(0)
+    }
     if (this.composer) this.composer.render()
     else this.renderer.render(this.scene, this.camera)
   }
