@@ -467,7 +467,7 @@ function inviteUrl(code: string): string {
 
 // одно действие: на телефоне — меню «Поделиться», на компьютере — копируем ссылку
 const canShare = !!navigator.share && window.matchMedia('(pointer: coarse)').matches
-$('ic-copy').textContent = canShare ? 'Отправить ссылку' : 'Скопировать ссылку'
+$('ic-copy').textContent = 'Пригласить'
 
 async function sendInvite(): Promise<void> {
   if (!net) return
@@ -479,14 +479,28 @@ async function sendInvite(): Promise<void> {
   try {
     await navigator.clipboard.writeText(`${text}: ${url}`)
     const b = $('ic-copy')
-    b.textContent = 'Скопировано ✓'
-    setTimeout(() => { b.textContent = canShare ? 'Отправить ссылку' : 'Скопировать ссылку' }, 2000)
-    showToast('Ссылка скопирована — вставь её в чат коллегам', 3000)
+    b.textContent = 'Приглашение скопировано ✓'
+    setTimeout(() => { b.textContent = 'Пригласить' }, 2000)
+    showToast('Приглашение скопировано — вставь его в чат коллегам', 3000)
   } catch {
     window.prompt('Скопируй ссылку и отправь коллегам:', url)
   }
 }
 $('ic-copy').addEventListener('click', () => void sendInvite())
+// нажатие на ссылку — копирует только ссылку
+$('ic-link').addEventListener('click', async () => {
+  if (!net) return
+  const url = inviteUrl(net.code)
+  const el = $('ic-link')
+  try {
+    await navigator.clipboard.writeText(url)
+    el.classList.add('copied')
+    el.textContent = 'Ссылка скопирована ✓'
+    setTimeout(() => { el.classList.remove('copied'); el.textContent = url }, 1500)
+  } catch {
+    window.prompt('Скопируй ссылку:', url)
+  }
+})
 $('ic-close').addEventListener('click', () => { $('invite-card').hidden = true })
 // «Позвать коллег» просто открывает ту же карточку
 $('btn-invite').addEventListener('click', () => {
