@@ -96,7 +96,7 @@ interface Projectile {
   w: WeaponId
 }
 
-interface PendingMelee { t: number; by: string; w: WeaponId; a: number }
+interface PendingMelee { t: number; by: string; w: WeaponId; a: number; x: number; z: number }
 
 interface Pickup { spot: PickupSpot; mesh: THREE.Group; ring: THREE.Sprite; extras: THREE.Object3D[]; respawnIn: number }
 
@@ -403,7 +403,7 @@ export class Match {
         this.projectiles.push({ mesh, x: sx, z: sz, vx: Math.sin(a) * sp, vz: Math.cos(a) * sp, left: w.range, owner: f.id, w: w.id })
       }
     } else {
-      this.pending.push({ t: w.windup / asm, by: f.id, w: w.id, a: m.a })
+      this.pending.push({ t: w.windup / asm, by: f.id, w: w.id, a: m.a, x: m.x, z: m.z })
     }
   }
 
@@ -418,7 +418,8 @@ export class Match {
       const w = WEAPONS[p.w]
       // засчитываем только себе (и манекенам, если бьём мы)
       for (const v of this.victimsOf(by)) {
-        const r = this.meleeCheck(by.body.x, by.body.z, p.a, w, v)
+        // точка удара — где атакующий был у себя на экране (из сообщения), а не где мы его видим с задержкой
+        const r = this.meleeCheck(p.x, p.z, p.a, w, v)
         if (r) this.receiveHit(v, w, by.id, r.dx, r.dz, r.back)
       }
     }
