@@ -59,13 +59,21 @@ export interface NetEvents {
  * (в отличие от прямых WebRTC-соединений, которые режут мобильные операторы и офисные сети).
  * Подключаемся сразу к нескольким и шлём во все — игра живёт, пока жив хоть один. Повторы отбрасываем.
  */
-const BROKERS = [
-  'wss://broker.emqx.io:8084/mqtt',
-  'wss://broker.hivemq.com:8884/mqtt',
+type Broker = { url: string; v5: boolean; user?: string; pass?: string }
+const PUBLIC_BROKERS: Broker[] = [
+  { url: 'wss://broker.emqx.io:8084/mqtt', v5: true },
+  { url: 'wss://broker.hivemq.com:8884/mqtt', v5: true },
+  // на порту 443, как обычные сайты: их пропускают офисные и школьные сети, где 8084/8884 закрыты
+  { url: 'wss://mqtt.eclipseprojects.io:443/mqtt', v5: true },
+  { url: 'wss://public.cloud.shiftr.io:443', v5: false, user: 'public', pass: 'public' },
 ]
+// ?broker=ws://… — свой брокер (только для автотестов)
+const CUSTOM = new URLSearchParams(location.search).getAll('broker')
+const BROKERS: Broker[] = CUSTOM.length ? CUSTOM.map((url) => ({ url, v5: false })) : PUBLIC_BROKERS
 
 const PREFIX = `office-rage/${GAME.net.appId}`
 const PEER_TIMEOUT = 15000 // молчит дольше — считаем, что ушёл
+const SLOT_STALE = 5000 // молчит дольше — его лифт можно занять
 
 type Envelope = { f: string; s: number; k: string; d: unknown; to?: string }
 
@@ -92,7 +100,9 @@ export class NetRoom {
   /** Что ещё положить в приветствие (счётчики предметов) */
   helloExtra: () => number[] = () => []
   /** диагностика: что приходит с каждого брокера, обрывы, почему кого-то потеряли */
-  readonly stats = { rx: [0, 0], tx: 0, closes: [0, 0], drops: [] as string[], rtt: [0, 0] }
+  readonly stats = { rx: BROKERS.map(() => 0), tx: 0, closes: BROKERS.map(() => 0), drops: [] as string[], rtt: BROKERS.map(() => 0) }
+  /** когда впервые подключились хоть к одному брокеру */
+  private firstLink = 0
   readonly atk: (m: AtkMsg) => void
   readonly hurt: (m: HurtMsg) => void
   readonly die: (m: DieMsg) => void
@@ -110,11 +120,13 @@ export class NetRoom {
     this.die = (m) => this.send('die', m)
     this.pick = (m) => this.send('pick', m)
 
-    BROKERS.forEach((url, bi) => {
+    BROKERS.forEach(({ url, v5, user, pass }, bi) => {
       const c = mqtt.connect(url, {
+        username: user,
+        password: pass,
         clientId: `or_${this.selfId}_${Math.random().toString(36).slice(2, 6)}`,
         clean: true,
-        protocolVersion: 5, // MQTT 5: можно не получать обратно свои же сообщения (вдвое меньше входящего трафика)
+        protocolVersion: v5 ? 5 : 4, // MQTT 5: можно не получать обратно свои же сообщения (вдвое меньше входящего трафика)
         connectTimeout: 8000,
         reconnectPeriod: 3000,
         keepalive: 20,
@@ -122,7 +134,8 @@ export class NetRoom {
         will: { topic: this.topic, payload: JSON.stringify({ f: this.selfId, s: -1, k: 'bye', d: null }), qos: 0, retain: false },
       })
       c.on('connect', () => {
-        c.subscribe(this.topic, { qos: 0, nl: true })
+        if (!this.firstLink) this.firstLink = performance.now()
+        c.subscribe(this.topic, v5 ? { qos: 0, nl: true } : { qos: 0 })
         c.subscribe(`${this.topic}/ping/${this.selfId}`, { qos: 0 })
         this.hello()
         ev.onLink?.()
@@ -180,6 +193,9 @@ export class NetRoom {
       // «прощание» от брокера (s = -1) приходит и при коротком обрыве с одним из брокеров —
       // если игрок только что был слышен через другой, не выкидываем его
       if (env.s >= 0 || Date.now() - (this.lastHeard.get(env.f) ?? 0) > 3000) this.drop(env.f, env.s >= 0 ? 'вышел' : 'брокер: обрыв')
+      // иначе — «под подозрением»: если за 3 с не скажет ни слова и через другие брокеры, значит, правда ушёл
+      // (закрыл вкладку или обновил страницу — прощальное сообщение при этом часто не успевает уйти)
+      else if (this.lastHeard.has(env.f)) this.lastHeard.set(env.f, Math.min(this.lastHeard.get(env.f)!, Date.now() - PEER_TIMEOUT + 3000))
       return
     }
     // одно и то же сообщение приходит от каждого брокера — пропускаем повторы
@@ -209,6 +225,10 @@ export class NetRoom {
         this.peers.set(id, info)
         if (!prev) this.hello(id) // новичку сразу отвечаем, не дожидаясь таймера
         // двое заняли один лифт — уступает тот, кто зашёл позже
+        // если кто-то молчащий держал тот же лифт, что и новичок, — это призрак, убираем сразу
+        for (const [pid, p] of this.peers) {
+          if (pid !== id && p.slot === info.slot && info.slot >= 0 && Date.now() - (this.lastHeard.get(pid) ?? 0) > SLOT_STALE) this.drop(pid, 'переподключился')
+        }
         if (info.slot >= 0 && info.slot === this.mySlot &&
           (info.joinedAt < this.joinedAt || (info.joinedAt === this.joinedAt && id < this.selfId))) {
           const free = this.freeSlot()
@@ -247,9 +267,27 @@ export class NetRoom {
     if (this.peers.delete(id)) this.ev.onPeerLeave(id)
   }
 
+  /**
+   * Готовы выбирать лифт: связь есть и мы уже послушали комнату (кто здесь, какие лифты заняты).
+   * Раньше слушали фиксированные 1.8 с — а на медленной сети подключение само занимает 2–5 с,
+   * и новичок вставал в чужой лифт «вслепую». false — связи так и не появилось.
+   */
+  async ready(listenMs = 1500, maxMs = 12000): Promise<boolean> {
+    const t0 = performance.now()
+    for (;;) {
+      if (this.left) return false
+      const now = performance.now()
+      if (this.firstLink && now - this.firstLink >= listenMs) return true
+      if (now - t0 > maxMs) return false
+      await new Promise((r) => setTimeout(r, 100))
+    }
+  }
+
   /** Свободный лифт с наименьшим номером, -1 — мест нет */
   private freeSlot(): number {
-    const used = new Set([...this.peers.values()].map((p) => p.slot))
+    // лифт молчащего несколько секунд игрока считаем свободным: скорее всего, это он же, обновивший страницу
+    const now = Date.now()
+    const used = new Set([...this.peers.values()].filter((p) => now - (this.lastHeard.get(p.id) ?? 0) < SLOT_STALE).map((p) => p.slot))
     for (let i = 0; i < GAME.maxPlayers; i++) if (!used.has(i)) return i
     return -1
   }

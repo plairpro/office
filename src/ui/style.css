@@ -502,3 +502,27 @@ html, body {
   #btn-attack.held { background: rgba(211, 18, 42, 0.12); }
   #btn-attack:active { transform: none; }
 }
+
+/* Загрузка: только полоска по центру, одинаковые отступы по краям */
+#loader {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  padding: 0 32px; background: #d9dcef;
+  font: 600 14px/1.2 system-ui, -apple-system, sans-serif; color: #6a4fb0;
+  transition: opacity .35s;
+}
+#loader .lbar { width: 100%; max-width: 360px; height: 8px; border-radius: 99px; background: rgba(106, 79, 176, 0.15); overflow: hidden; }
+#loader .lbar i { display: block; height: 100%; width: 0; border-radius: inherit; background: #6a4fb0; transition: width .2s; }
+#loader.done { opacity: 0; pointer-events: none; }
+
+/* меню никогда не шире экрана: одинаковые отступы слева и справа на любом телефоне */
+.overlay { grid-template-columns: minmax(0, 1fr); }
+.overlay > .card { max-width: 100%; min-width: 0; justify-self: center; }
+#chars { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.char { min-width: 0; }
+@media (max-width: 420px) {
+  .char img { width: 38px !important; height: 38px !important; }
+  .char b, .char .info b { font-size: 12px !important; letter-spacing: -0.2px; }
+  .char { gap: 6px !important; padding: 6px !important; }
+  .char .info b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}

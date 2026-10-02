@@ -96,6 +96,9 @@ interface Projectile {
   w: WeaponId
 }
 
+/** На сколько секунд назад засчитываем удары по себе (задержка сети + плавное отображение) */
+const LAG_COMP = 0.45
+
 interface PendingMelee { t: number; by: string; w: WeaponId; a: number; x: number; z: number }
 
 interface Pickup { spot: PickupSpot; mesh: THREE.Group; holder: THREE.Group; ring: THREE.Sprite; extras: THREE.Object3D[]; respawnIn: number; x: number; z: number; count: number }
@@ -112,6 +115,9 @@ export class Match {
   winIn = 0 // > 0 — висит экран победителя
   private projectiles: Projectile[] = []
   private pending: PendingMelee[] = []
+  /** Где был свой игрок последние полсекунды: атакующий видел нас с задержкой сети,
+   *  поэтому удар засчитываем, если он попал хоть в одну из этих точек (иначе на бегу по тебе почти не попасть) */
+  private trail: { t: number; x: number; z: number }[] = []
   private pickups: Pickup[] = []
   private shotWalls: AABB[]
   private projTemplates: Record<'staple' | 'bill', THREE.Mesh>
@@ -303,7 +309,11 @@ export class Match {
   update(dt: number, ctl: Controls): void {
     this.time += dt
     const me = this.local
-    if (me) this.updateLocal(me, dt, ctl)
+    if (me) {
+      this.updateLocal(me, dt, ctl)
+      this.trail.push({ t: this.time, x: me.body.x, z: me.body.z })
+      while (this.trail.length && this.time - this.trail[0].t > LAG_COMP) this.trail.shift()
+    }
     for (const f of this.fighters.values()) {
       if (f.kind === 'remote') this.updateRemote(f, dt)
       else if (f.kind === 'dummy') this.updateDummy(f, dt)
@@ -479,7 +489,17 @@ export class Match {
       // засчитываем только себе (и манекенам, если бьём мы)
       for (const v of this.victimsOf(by)) {
         // точка удара — где атакующий был у себя на экране (из сообщения), а не где мы его видим с задержкой
-        const r = this.meleeCheck(p.x, p.z, p.a, w, v)
+        let r = this.meleeCheck(p.x, p.z, p.a, w, v)
+        if (!r && v.kind === 'local' && by.kind === 'remote') {
+          // компенсация задержки: проверяем, где мы были недавно
+          const bx = v.body.x, bz = v.body.z
+          for (let k = this.trail.length - 1; k >= 0 && !r; k--) {
+            if (this.time - this.trail[k].t > LAG_COMP) break
+            v.body.x = this.trail[k].x; v.body.z = this.trail[k].z
+            r = this.meleeCheck(p.x, p.z, p.a, w, v)
+          }
+          v.body.x = bx; v.body.z = bz
+        }
         if (r) this.receiveHit(v, w, by.id, r.dx, r.dz, r.back)
       }
       // наш удар по живому игроку: урон посчитает он сам, а кровь и звук показываем сразу, не дожидаясь ответа по сети

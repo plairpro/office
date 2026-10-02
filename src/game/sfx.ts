@@ -20,7 +20,14 @@ class Sfx {
 
   /** Браузер разрешает звук только после действия пользователя */
   unlock(): void {
-    if (this.ctx) { void this.ctx.resume(); return }
+    // iPhone: без этого Web Audio молчит, когда на телефоне включён беззвучный режим
+    const nav = navigator as unknown as { audioSession?: { type: string } }
+    if (nav.audioSession && nav.audioSession.type !== 'playback') try { nav.audioSession.type = 'playback' } catch { /* старый Safari */ }
+    if (this.ctx) {
+      // iOS «приостанавливает» звук при сворачивании, звонке, блокировке — будим на каждом касании
+      if (this.ctx.state !== 'running') { void this.ctx.resume(); this.blip() }
+      return
+    }
     const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
     if (!AC) return
     this.ctx = new AC()
@@ -38,6 +45,39 @@ class Sfx {
     this.noiseBuf = this.ctx.createBuffer(1, n, n)
     const d = this.noiseBuf.getChannelData(0)
     for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1
+    void this.ctx.resume()
+    this.blip()
+    this.silentTag()
+  }
+
+  /** Неслышный звук внутри касания — iOS разблокирует аудио только так */
+  private blip(): void {
+    const ctx = this.ctx
+    if (!ctx) return
+    const src = ctx.createBufferSource()
+    src.buffer = ctx.createBuffer(1, 1, 22050)
+    src.connect(ctx.destination)
+    src.start(0)
+  }
+
+  /** Тихий <audio> в цикле: переводит iPhone в режим «медиа», и звук слышно даже с выключенным рингером (старые iOS) */
+  private silentTag(): void {
+    if (!/iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent) || !('ontouchend' in document)) return
+    const a = document.createElement('audio')
+    a.setAttribute('x-webkit-airplay', 'deny')
+    a.loop = true
+    a.preload = 'auto'
+    // 0.1 с тишины, WAV 8 кГц
+    const n = 800, buf = new Uint8Array(44 + n)
+    const dv = new DataView(buf.buffer)
+    const str = (o: number, t: string) => { for (let i = 0; i < t.length; i++) buf[o + i] = t.charCodeAt(i) }
+    str(0, 'RIFF'); dv.setUint32(4, 36 + n, true); str(8, 'WAVEfmt '); dv.setUint32(16, 16, true)
+    dv.setUint16(20, 1, true); dv.setUint16(22, 1, true); dv.setUint32(24, 8000, true); dv.setUint32(28, 8000, true)
+    dv.setUint16(32, 1, true); dv.setUint16(34, 8, true); str(36, 'data'); dv.setUint32(40, n, true)
+    buf.fill(128, 44)
+    a.src = URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }))
+    void a.play().catch(() => {})
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) void a.play().catch(() => {}) })
   }
 
   setMuted(m: boolean): void {

@@ -13,15 +13,13 @@ import { loadAssets } from './assets'
 // ---------- рендер ----------
 
 const host = $('game')
+// ?norender — без картинки (автотесты нескольких игроков на одной машине)
+const NORENDER = new URLSearchParams(location.search).has('norender')
 
 // ---------- загрузка моделей ----------
-const mainBtn = $('btn-main') as HTMLButtonElement
-const mainLabel = mainBtn.textContent
-mainBtn.disabled = true
-mainBtn.textContent = 'Загружаем офис… 0%'
-await loadAssets((p) => { mainBtn.textContent = `Загружаем офис… ${Math.round(p * 100)}%` })
-mainBtn.textContent = mainLabel
-mainBtn.disabled = false
+await loadAssets((p) => {
+  $('lbar-fill').style.width = `${Math.round(p * 100)}%`
+})
 
 const office = buildOffice()
 const camera = new THREE.PerspectiveCamera(GAME.camera.fov, 1, 0.5, 120)
@@ -51,7 +49,7 @@ gfx.setQuality(savedQ === 'low' || savedQ === 'medium' || savedQ === 'high' ? sa
 resize()
 
 // звук включается после первого касания/клавиши — так требуют браузеры
-for (const ev of ['pointerdown', 'keydown'] as const) window.addEventListener(ev, () => sfx.unlock(), { capture: true })
+for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'] as const) window.addEventListener(ev, () => sfx.unlock(), { capture: true, passive: true })
 const muteBtn = $('btn-mute') as HTMLButtonElement
 const setMute = (m: boolean) => { sfx.setMuted(m); muteBtn.textContent = m ? '🔇' : '🔊'; savePref('mute', m ? '1' : '0') }
 setMute(loadPref('mute') === '1')
@@ -408,10 +406,11 @@ async function startGame(code: string | null): Promise<void> {
   match.fx.gore = gore
   // сначала слушаем комнату: кто уже здесь и какие лифты заняты — потом выходим из своего
   $('invite-card').hidden = true
-  showToast('Входим в офис…', 1800)
+  showToast('Входим в офис…', 2500)
   const room = net
-  await new Promise((r) => setTimeout(r, 1800))
+  const linked = await room.ready()
   if (net !== room || !match) return // успели выйти в меню
+  if (!linked) showToast('Нет связи с игровыми серверами — проверь интернет или выключи VPN. Пока можно потренироваться', 7000)
   const slot = room.claimSlot()
   if (slot < 0) { backToMenu('В этой комнате уже 4 человека. Создай свою и позови коллег!'); return }
   match.addLocal(room.selfId, myName, myChar, PLAYER_COLORS[slot], slot)
@@ -572,7 +571,7 @@ function frame(time: number): void {
     if (net && diagAcc > 1) {
       // диагностика связи в настройках: серверы, входящие сообщения в секунду, обрывы, последняя потеря игрока
       const st = net.stats, r = net.relaysOnline()
-      const rx = st.rx[0] + st.rx[1]
+      const rx = st.rx.reduce((a, b) => a + b, 0)
       $('netdiag').textContent = `связь ${r.open}/${r.total} · пинг ${st.rtt.map((v) => (v ? Math.round(v) : '–')).join('/')} мс · ↓${Math.round((rx - lastRx) / diagAcc)}/с · обрывы ${st.closes.join('/')}` + (st.drops.length ? ` · ${st.drops[st.drops.length - 1]}` : '')
       lastRx = rx
       diagAcc = 0
@@ -612,8 +611,8 @@ function frame(time: number): void {
     camera.position.z += (Math.random() - 0.5) * a
   }
   camera.lookAt(camTarget)
-  gfx.render()
-  if (lineup.size) {
+  if (!NORENDER) gfx.render()
+  if (lineup.size && !NORENDER) {
     renderer.autoClear = false
     renderer.clearDepth()
     renderer.render(menuScene, camera)
@@ -630,7 +629,14 @@ function frame(time: number): void {
 
 
 window.addEventListener('beforeunload', () => net?.leave())
+window.addEventListener('pagehide', () => net?.leave())
 requestAnimationFrame(frame)
 ;(window as unknown as { __match: () => Match | null }).__match = () => match
 ;(window as unknown as { __net: () => NetRoom | null }).__net = () => net
 ;(window as unknown as { __cam: unknown }).__cam = camera
+// всё готово — убираем полоску загрузки, показываем меню
+requestAnimationFrame(() => {
+  $('menu').style.visibility = ''
+  $('loader').classList.add('done')
+  setTimeout(() => $('loader').remove(), 400)
+})
