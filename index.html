@@ -14,6 +14,7 @@
   </head>
   <body>
     <div id="game"></div>
+    <div id="vignette"></div>
 
     <!-- Меню -->
     <div id="menu" class="overlay">
@@ -40,14 +41,27 @@
         <div id="net-status" class="status"></div>
       </div>
       <button id="btn-invite" class="btn primary invite">📨 Позвать коллег</button>
+      <div class="panel me-panel">
+        <div class="hp"><div id="hp-fill"></div><span id="hp-text"></span></div>
+        <div class="weapon"><b id="weapon-name"></b> <span id="ammo"></span></div>
+        <div id="effects" class="effects"></div>
+      </div>
+      <ul id="feed"></ul>
+      <div id="death" hidden><b>УВОЛЕН</b><span id="death-sub"></span></div>
+      <div id="win" hidden><div class="win-card"><small>Сотрудник месяца</small><b id="win-name"></b><span id="win-sub"></span><small>Новый раунд через несколько секунд</small></div></div>
       <div class="panel fps"><span id="fps"></span>
+        <select id="gore" title="Кровь">
+          <option value="on">Кровь</option>
+          <option value="off">Конфетти</option>
+        </select>
         <select id="quality" title="Графика">
           <option value="low">Низкая</option>
           <option value="medium">Средняя</option>
           <option value="high">Высокая</option>
         </select>
       </div>
-      <div class="hint">WASD — бег · мышь — взгляд</div>
+      <div class="hint">WASD — бег · мышь — прицел · ЛКМ или пробел — удар · подбирай оружие и кофе с пола</div>
+      <button id="btn-attack" hidden aria-label="Удар">✊</button>
     </div>
 
     <div id="stick" hidden><div id="stick-knob"></div></div>

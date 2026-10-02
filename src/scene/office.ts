@@ -5,11 +5,15 @@ import { MV } from './palette'
 
 export interface Spawn { x: number; z: number; rot: number }
 
+/** Предмет на полу: оружие или кофе (лечит) */
+export interface PickupSpot { x: number; z: number; kind: 'stapler' | 'mop' | 'lamp' | 'moneygun' | 'coffee' }
+
 export interface Office {
   group: THREE.Group
   colliders: AABB[]
   spawns: Spawn[]
   cooler: { x: number; z: number; radius: number }
+  pickups: PickupSpot[]
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number }
   sunDir: THREE.Vector3
 }
@@ -222,6 +226,15 @@ export function buildOffice(): Office {
     colliders: b.colliders,
     spawns,
     cooler,
+    // «вертушка»: у каждого лифта своё оружие неподалёку, кофе — в двух дальних углах
+    pickups: [
+      { x: 1.8, z: -8.2, kind: 'stapler' }, // север, у отдела продаж — ближе к лифту 1
+      { x: -1.8, z: 8.2, kind: 'moneygun' }, // юг, у теннисного стола — ближе к лифту 2
+      { x: 13.2, z: -9.6, kind: 'lamp' }, // кабинет директора — ближе к лифту 3
+      { x: -6.4, z: 8.4, kind: 'mop' }, // у лаунжа и туалетов — ближе к лифту 4
+      { x: -10.4, z: -6.6, kind: 'coffee' }, // у переговорки, между лифтами 1 и 4
+      { x: 10.4, z: 6.6, kind: 'coffee' }, // у кухни, между лифтами 2 и 3
+    ],
     bounds: { minX: -W, maxX: W, minZ: -D, maxZ: D },
     sunDir: new THREE.Vector3(-0.35, 0.75, -0.55).normalize(),
   }

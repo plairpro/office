@@ -3,6 +3,8 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
 import type { AABB } from '../scene/builder'
 import { GAME, CHARACTERS, type CharacterId } from '../config/game'
 import { getAssets, type BaseChar } from '../assets'
+import { weaponMesh } from './weapons3d'
+import type { WeaponId } from '../config/game'
 
 // ======================================================================
 // Офисные персонажи на базе CC0-героев KayKit: та же модель и 27 анимаций,
@@ -186,8 +188,8 @@ function pizza(rig: Rig): void {
   const logo = new THREE.Mesh(geo(new THREE.CylinderGeometry(s * 0.2, s * 0.2, 0.01, 20), rig), mat(0xe8505b, rig))
   logo.position.y = s * 0.075
   box.add(lid, logo)
-  const hand = rig.box('ArmRight')
-  rig.attach('handslot.r', box, new THREE.Vector3(hand.min.x - s * 0.1, hand.min.y + s * 0.15, s * 0.35))
+  const hand = rig.box('ArmLeft')
+  rig.attach('handslot.l', box, new THREE.Vector3(hand.max.x + s * 0.1, hand.min.y + s * 0.15, s * 0.35))
 }
 
 function tie(rig: Rig, color: number): void {
@@ -227,6 +229,22 @@ export class Avatar {
   private ring: THREE.Mesh
   private disposables: (THREE.BufferGeometry | THREE.Material | THREE.Texture)[] = []
   private height = HEIGHT
+  private socket = new THREE.Group() // правая рука: сюда вешается оружие (единицы — метры)
+  private weaponObj: THREE.Object3D | null = null
+  private weaponId: WeaponId | null = null
+  private tmpQ = new THREE.Quaternion()
+  private tmpQ2 = new THREE.Quaternion()
+  private head: THREE.Object3D | null = null
+  private mats: THREE.MeshStandardMaterial[] = []
+  private flashT = 0
+  private flashColor = new THREE.Color()
+  private oneShot: THREE.AnimationAction | null = null
+  private deathAction: THREE.AnimationAction | null = null
+  dead = false
+  readonly skin = SKIN
+  headSize = 0.4
+  private hpBg: THREE.Sprite
+  private hpFg: THREE.Sprite
 
   constructor(name: string, private color: number, readonly character: CharacterId, _look = 0) {
     const look = LOOKS[character]
@@ -287,17 +305,36 @@ export class Avatar {
       disposables: this.disposables,
     }
     look.accessories(rig, color)
+    // гнездо для оружия в правой руке, оси — как у модели (вперёд = +Z)
+    const hand = rig.box('ArmRight')
+    rig.attach('handslot.r', this.socket, new THREE.Vector3(hand.min.x + 0.05, hand.min.y + 0.12, (hand.min.z + hand.max.z) / 2))
+    // как в паке KayKit: оружие крепится к слоту руки без поворота, «вперёд» оружия = ось Y слота
+    this.socket.position.set(0, 0, 0)
+    this.socket.quaternion.identity()
+    this.socket.rotation.x = -Math.PI / 2
+    this.head = model.getObjectByName('head') ?? null
 
     // масштаб под рост и опора на пол
     const box = new THREE.Box3().setFromObject(this.model)
     const k = HEIGHT / Math.max(box.max.y - box.min.y, 0.1)
     this.model.scale.setScalar(k)
     this.model.position.y = -box.min.y * k
+    this.socket.scale.multiplyScalar(1 / k)
+    const hb = rig.box('Head')
+    this.headSize = Math.max(hb.max.y - hb.min.y, hb.max.x - hb.min.x) * k
+    cache.forEach((m) => this.mats.push(m as THREE.MeshStandardMaterial))
+
+    this.mixer = new THREE.AnimationMixer(this.model)
+    this.mixer.addEventListener('finished', (e) => {
+      if (e.action === this.oneShot) {
+        this.oneShot.fadeOut(0.15)
+        this.oneShot = null
+      }
+    })
 
     this.root.add(this.model)
 
     // анимации
-    this.mixer = new THREE.AnimationMixer(this.model)
     for (const [key, clipName] of Object.entries(CLIP)) {
       const clip = a.clips.get(clipName)
       if (clip) this.actions.set(key, this.mixer.clipAction(clip))
@@ -317,6 +354,29 @@ export class Avatar {
     this.label = makeLabel(name, color)
     this.label.position.y = this.height + 0.45
     this.root.add(this.label)
+
+    // полоска здоровья над головой
+    const bar = (hex: number, opacity: number) => {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ color: hex, depthTest: false, transparent: true, opacity }))
+      sp.renderOrder = 11
+      sp.position.y = this.height + 0.18
+      sp.scale.set(0.9, 0.07, 1)
+      this.root.add(sp)
+      return sp
+    }
+    this.hpBg = bar(0x3d3557, 0.35)
+    this.hpFg = bar(0xd3122a, 0.95)
+    this.hpBg.visible = this.hpFg.visible = false
+  }
+
+  /** Здоровье 0..1 над головой; null — скрыть */
+  setHp(frac: number | null): void {
+    const show = frac !== null && !this.dead
+    this.hpBg.visible = this.hpFg.visible = show && frac > 0
+    if (!show || frac <= 0) return
+    const f = Math.min(1, frac)
+    this.hpFg.scale.x = 0.9 * f
+    this.hpFg.center.set(0.5 / f, 0.5)
   }
 
   private play(key: string, fade = 0.2): void {
@@ -324,7 +384,98 @@ export class Avatar {
     if (!next || next === this.current) return
     next.reset().play()
     if (this.current) next.crossFadeFrom(this.current, fade, true)
+    else next.fadeIn(fade)
     this.current = next
+  }
+
+  /** Разовая анимация поверх бега: удар, выстрел, получение урона */
+  action(clipName: string, speed = 1): void {
+    if (this.dead) return
+    const clip = getAssets().clips.get(clipName)
+    if (!clip) return
+    const a = this.mixer.clipAction(clip)
+    a.reset()
+    a.setLoop(THREE.LoopOnce, 1)
+    a.clampWhenFinished = false
+    a.timeScale = speed
+    a.setEffectiveWeight(1)
+    a.fadeIn(0.05).play()
+    if (this.current) { this.current.fadeOut(0.05); this.current = null }
+    if (this.oneShot && this.oneShot !== a) this.oneShot.fadeOut(0.05)
+    this.oneShot = a
+  }
+
+  /** Оружие в правой руке */
+  setWeapon(id: WeaponId): void {
+    if (id === this.weaponId) return
+    this.weaponId = id
+    if (this.weaponObj) {
+      this.socket.remove(this.weaponObj)
+      this.weaponObj.traverse((o) => {
+        if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose() }
+      })
+    }
+    this.weaponObj = weaponMesh(id)
+    // мультяшные руки крупнее настоящих — оружие тоже чуть увеличиваем, чтобы читалось сверху
+    this.weaponObj.scale.setScalar(id === 'mop' ? 1.15 : id === 'lamp' ? 2 : 2.5)
+    this.socket.add(this.weaponObj)
+  }
+
+  /** Вспышка при попадании */
+  flash(hex = 0xff2a3d): void {
+    this.flashT = 0.18
+    this.flashColor.setHex(hex)
+  }
+
+  /** Мигание при неуязвимости после респа */
+  blink(visible: boolean): void {
+    this.model.visible = visible
+  }
+
+  /** Смерть: анимация падения, голова отлетает отдельно — возвращает её мировую позицию */
+  die(withHead = true): THREE.Vector3 | null {
+    if (this.dead) return null
+    this.dead = true
+    this.oneShot?.fadeOut(0.05)
+    this.oneShot = null
+    this.current?.fadeOut(0.1)
+    this.current = null
+    const clip = getAssets().clips.get('Death_A')
+    if (clip) {
+      this.deathAction = this.mixer.clipAction(clip)
+      this.deathAction.reset()
+      this.deathAction.setLoop(THREE.LoopOnce, 1)
+      this.deathAction.clampWhenFinished = true
+      this.deathAction.timeScale = 1.4
+      this.deathAction.fadeIn(0.05).play()
+    }
+    this.ring.visible = false
+    this.hpBg.visible = this.hpFg.visible = false
+    if (!withHead || !this.head) return null
+    this.model.updateMatrixWorld(true)
+    const p = new THREE.Vector3()
+    this.head.getWorldPosition(p)
+    this.head.scale.setScalar(0.001) // вместе с головой исчезают очки, кепка, причёска
+    return p
+  }
+
+  /** Точка шеи — для фонтана */
+  neck(): THREE.Vector3 | null {
+    if (!this.head) return null
+    const p = new THREE.Vector3()
+    this.head.getWorldPosition(p)
+    return p
+  }
+
+  revive(): void {
+    this.dead = false
+    this.deathAction?.stop()
+    this.deathAction = null
+    this.head?.scale.setScalar(1)
+    this.ring.visible = true
+    this.model.visible = true
+    this.current = null
+    this.play('idle', 0.05)
   }
 
   /** Цвет игрока зависит от порядка входа — при смене пересобираем перекраску */
@@ -371,19 +522,37 @@ export class Avatar {
 
   /** speed — текущая скорость (м/с), facing — угол взгляда */
   animate(dt: number, speed: number, facing: number): void {
+    if (this.flashT > 0) {
+      this.flashT = Math.max(0, this.flashT - dt)
+      const f = (this.flashT / 0.18) * 0.9
+      for (const m of this.mats) m.emissive.copy(this.flashColor).multiplyScalar(f)
+    }
+    if (this.dead) { this.mixer.update(dt); return }
     this.model.rotation.y = facing
     const k = speed / GAME.player.speed
-    if (k > 0.55) this.play('run')
+    if (this.oneShot) { /* удар/выстрел доигрывает поверх */ }
+    else if (k > 0.55) this.play('run')
     else if (k > 0.12) this.play('walk')
     else this.play('idle')
     const run = this.actions.get('run')
     if (run && this.current === run) run.timeScale = 0.75 + k * 0.45
     this.mixer.update(dt)
+    // степлер и деньгомёт всегда смотрят туда же, куда персонаж — так понятно, куда полетит
+    if (this.weaponObj && (this.weaponId === 'stapler' || this.weaponId === 'moneygun')) {
+      this.socket.updateWorldMatrix(true, false)
+      this.socket.getWorldQuaternion(this.tmpQ).invert()
+      this.model.getWorldQuaternion(this.tmpQ2)
+      this.weaponObj.quaternion.multiplyQuaternions(this.tmpQ, this.tmpQ2)
+    } else if (this.weaponObj) this.weaponObj.quaternion.identity()
   }
 
   dispose(): void {
     this.mixer.stopAllAction()
+    this.weaponObj?.traverse((o) => {
+      if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose() }
+    })
     this.disposables.forEach((d) => d.dispose())
+    for (const sp of [this.hpBg, this.hpFg]) sp.material.dispose()
     this.ring.geometry.dispose()
     ;(this.ring.material as THREE.Material).dispose()
     ;(this.label.material as THREE.SpriteMaterial).map?.dispose()

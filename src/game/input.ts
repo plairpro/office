@@ -6,10 +6,14 @@ export class Input {
   readonly mouseNdc = new THREE.Vector2(0, 0)
   mouseDown = false
   hasMouse = false
+  /** последний ввод был пальцем — целимся автоматически */
+  touchMode = false
+  private attackBtn = false
 
   constructor(private el: HTMLElement) {
     window.addEventListener('keydown', (e) => {
       if (isTyping(e)) return
+      if (e.code === 'Space') e.preventDefault()
       this.keys.add(e.code)
     })
     window.addEventListener('keyup', (e) => this.keys.delete(e.code))
@@ -20,10 +24,28 @@ export class Input {
       this.mouseNdc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
       this.hasMouse = true
     })
-    el.addEventListener('pointerdown', (e) => { if (e.button === 0) this.mouseDown = true })
+    el.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button === 0) this.mouseDown = true
+      this.touchMode = e.pointerType !== 'mouse'
+    })
+    window.addEventListener('keydown', (e) => { if (!isTyping(e)) this.touchMode = false })
+    // кнопка удара на телефоне — отдельный палец, стик при этом работает
+    const btn = document.getElementById('btn-attack')
+    if (btn) {
+      btn.addEventListener('pointerdown', (e) => { e.preventDefault(); this.attackBtn = true; this.touchMode = true; btn.setPointerCapture(e.pointerId) })
+      const up = () => { this.attackBtn = false }
+      btn.addEventListener('pointerup', up)
+      btn.addEventListener('pointercancel', up)
+      btn.addEventListener('lostpointercapture', up)
+    }
     window.addEventListener('pointerup', () => { this.mouseDown = false })
     el.addEventListener('contextmenu', (e) => e.preventDefault())
     this.setupStick()
+  }
+
+  /** Держит атаку: ЛКМ, пробел или кнопка на экране */
+  get attacking(): boolean {
+    return this.mouseDown || this.attackBtn || this.keys.has('Space')
   }
 
   // --- сенсорный стик: палец в любом месте экрана = центр стика ---

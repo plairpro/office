@@ -142,6 +142,10 @@ o.spawns.forEach((s, i) => {
   g.fillStyle = '#fff'; g.font = 'bold 16px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'
   g.fillText(String(i + 1), X(s.x), Z(s.z) + 1)
 })
+for (const p of o.pickups) {
+  g.fillStyle = p.kind === 'coffee' ? '#7c5a8c' : '#d3122a'
+  g.fillRect(X(p.x) - 7, Z(p.z) - 7, 14, 14)
+}
 g.fillStyle = '#3d3a66'; g.font = '15px sans-serif'; g.textAlign = 'left'
 const y0 = (maxZ - minZ) * PX + 22
 g.fillText(`Зелёное — закрыто, красное — простреливается (дальность ${RANGE} м). Тёмное — стены/укрытия выше груди, светлое — низкие (только движение).`, 12, y0)
@@ -151,5 +155,6 @@ g.fillText(`Средняя открытость ${(avgExp * 100).toFixed(0)}% ·
   image: cv.toDataURL('image/png'),
   avgExposure: +avgExp.toFixed(2), coolerExposure: +coolerExp.toFixed(2), longLines,
   spawns: spawnInfo, walkableCells: pts.length,
+  pickups: o.pickups.map((p) => ({ ...p, walkable: walkable(p.x, p.z), toSpawns: o.spawns.map((s) => +at(pathFrom(s.x, s.z), p.x, p.z).toFixed(1)) })),
 }
 document.body.appendChild(cv)

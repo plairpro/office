@@ -62,7 +62,18 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
 
 export const CHARACTER_ORDER: CharacterId[] = ['accountant', 'boss', 'secretary', 'courier']
 
-// --- Оружие (используется со следующего этапа) ---
+// --- Матч ---
+
+export const MATCH = {
+  killsToWin: 10,
+  respawnDelay: 3, // секунды до возрождения
+  spawnProtect: 1.5, // неуязвимость после возрождения
+  pickupRespawn: 12, // оружие на полу появляется снова
+  coffeeHeal: 30,
+  winPause: 7, // сколько висит экран победителя
+} as const
+
+// --- Оружие ---
 
 export type Effect =
   | { kind: 'bleed'; seconds: number; dps: number }
@@ -71,46 +82,64 @@ export type Effect =
   | { kind: 'disarm'; seconds: number }
   | { kind: 'knockback'; force: number }
 
+export type WeaponId = 'cutter' | 'stapler' | 'mop' | 'lamp' | 'moneygun'
+
 export interface WeaponDef {
-  id: string
+  id: WeaponId
   name: string
   type: 'melee' | 'ranged'
   range: number // метры
-  damage: number
+  damage: number // за попадание (у деньгомёта — за купюру)
   cooldown: number // секунды между атаками
-  windup?: number // замах перед ударом (видно противнику)
+  windup: number // замах перед ударом — видно противнику, можно увернуться
   arc?: number // угол удара в градусах (ближний бой)
-  pellets?: number // дробь
+  pellets?: number // сколько снарядов за выстрел
   spread?: number // разброс в градусах
-  ammo?: number
+  speed?: number // скорость снаряда, м/с
+  ammo?: number // патроны; кончились — снова нож
   backstabMultiplier?: number
   effects: Effect[]
+  clip: string // анимация атаки из пака KayKit
+  animSpeed: number
 }
 
-export const WEAPONS: Record<string, WeaponDef> = {
+/** Порядок важен: индекс уходит в сеть */
+export const WEAPON_IDS: WeaponId[] = ['cutter', 'stapler', 'mop', 'lamp', 'moneygun']
+
+export const WEAPONS: Record<WeaponId, WeaponDef> = {
+  // всегда с собой: быстрый, кровотечение, двойной урон в спину
   cutter: {
     id: 'cutter', name: 'Канцелярский нож', type: 'melee',
-    range: 1.1, damage: 18, cooldown: 0.35, arc: 70, backstabMultiplier: 2,
+    range: 1.25, damage: 16, cooldown: 0.38, windup: 0.08, arc: 80, backstabMultiplier: 2,
     effects: [{ kind: 'bleed', seconds: 10, dps: 2 }],
+    clip: '1H_Melee_Attack_Stab', animSpeed: 1.8,
   },
+  // основной «ствол»: очередь скобок, магазин 12
   stapler: {
     id: 'stapler', name: 'Степлер', type: 'ranged',
-    range: 10, damage: 12, cooldown: 0.22, spread: 4, ammo: 12,
+    range: 10, damage: 11, cooldown: 0.24, windup: 0, spread: 5, speed: 24, ammo: 12,
     effects: [{ kind: 'bleed', seconds: 5, dps: 1.5 }],
+    clip: '1H_Ranged_Shoot', animSpeed: 2.2,
   },
+  // контроль: широкий размах, отталкивает и замедляет
   mop: {
     id: 'mop', name: 'Швабра', type: 'melee',
-    range: 2.2, damage: 10, cooldown: 0.7, arc: 140,
-    effects: [{ kind: 'slow', seconds: 5, factor: 0.6 }, { kind: 'knockback', force: 6 }],
+    range: 2.3, damage: 12, cooldown: 0.75, windup: 0.18, arc: 150,
+    effects: [{ kind: 'slow', seconds: 4, factor: 0.6 }, { kind: 'knockback', force: 9 }],
+    clip: '2H_Melee_Attack_Slice', animSpeed: 1.5,
   },
+  // тяжёлый удар: долгий замах, который видно заранее, короткий стан
   lamp: {
     id: 'lamp', name: 'Настольная лампа', type: 'melee',
-    range: 1.2, damage: 35, cooldown: 1.1, windup: 0.45, arc: 90,
+    range: 1.45, damage: 38, cooldown: 1.1, windup: 0.42, arc: 100,
     effects: [{ kind: 'stun', seconds: 0.7 }],
+    clip: '2H_Melee_Attack_Chop', animSpeed: 1.3,
   },
+  // «дробовик»: веер купюр, короткое обезоруживание
   moneygun: {
     id: 'moneygun', name: 'Деньгомёт', type: 'ranged',
-    range: 5, damage: 5, cooldown: 0.9, pellets: 6, spread: 28, ammo: 6,
-    effects: [{ kind: 'disarm', seconds: 1.5 }],
+    range: 5.5, damage: 6, cooldown: 0.9, windup: 0, pellets: 7, spread: 32, speed: 15, ammo: 6,
+    effects: [{ kind: 'disarm', seconds: 1.2 }],
+    clip: '1H_Ranged_Shoot', animSpeed: 1.6,
   },
 }

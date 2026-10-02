@@ -1,10 +1,11 @@
 import * as THREE from 'three'
-import { GAME, PLAYER_COLORS, CHARACTERS, CHARACTER_ORDER, type CharacterId } from './config/game'
+import { GAME, PLAYER_COLORS, CHARACTERS, CHARACTER_ORDER, MATCH, WEAPONS, type CharacterId, type WeaponId } from './config/game'
 import { buildOffice } from './scene/office'
 import { Renderer, autoQuality, type Quality } from './scene/render'
-import { Avatar, stepBody, type Body } from './game/avatar'
+import { Avatar } from './game/avatar'
+import { Match, type MatchHooks } from './game/match'
 import { Input } from './game/input'
-import { NetRoom, makeRoomCode, readRoomCode, type StatePacket } from './net/room'
+import { NetRoom, makeRoomCode, readRoomCode } from './net/room'
 import { $, showToast, loadName, saveName, loadPref, savePref } from './ui/dom'
 import { loadAssets } from './assets'
 
@@ -32,6 +33,8 @@ scene.add(office.group)
 const camOffset = new THREE.Vector3(GAME.camera.offset.x, GAME.camera.offset.y, GAME.camera.offset.z)
 const camTarget = new THREE.Vector3()
 let camZoom = 0.42
+// ?zoom=0.5 — камера ближе (для скриншотов и маленьких экранов)
+const ZOOM = Number(new URLSearchParams(location.search).get('zoom')) || 1
 
 function resize(): void {
   const w = window.innerWidth, h = window.innerHeight
@@ -47,6 +50,15 @@ const savedQ = new URLSearchParams(location.search).get('q') ?? loadPref('qualit
 gfx.setQuality(savedQ === 'low' || savedQ === 'medium' || savedQ === 'high' ? savedQ : autoQuality())
 resize()
 
+const goreSelect = $('gore') as HTMLSelectElement
+goreSelect.value = loadPref('gore') === 'off' ? 'off' : 'on'
+goreSelect.addEventListener('change', () => {
+  gore = goreSelect.value === 'on'
+  if (match) match.fx.gore = gore
+  savePref('gore', goreSelect.value)
+  goreSelect.blur()
+})
+
 const qSelect = $('quality') as HTMLSelectElement
 qSelect.value = gfx.getQuality()
 qSelect.addEventListener('change', () => {
@@ -55,77 +67,108 @@ qSelect.addEventListener('change', () => {
   qSelect.blur()
 })
 
-// ---------- игроки ----------
+// ---------- бой ----------
 
 const input = new Input(renderer.domElement)
 
-interface Local { avatar: Avatar; body: Body; facing: number; character: CharacterId }
-interface Remote { avatar: Avatar; body: Body; target: Body; facing: number; lastAt: number }
-
-let me: Local | null = null
-const remotes = new Map<string, Remote>()
+let match: Match | null = null
 let net: NetRoom | null = null
+let gore = loadPref('gore') !== 'off'
+const WEAPON_ICON: Record<WeaponId, string> = { cutter: '🔪', stapler: '📎', mop: '🧹', lamp: '💡', moneygun: '💸' }
+const hex = (c: number) => '#' + c.toString(16).padStart(6, '0')
 
-function spawnLocal(name: string, slot: number): void {
-  const sp = office.spawns[slot % office.spawns.length]
-  const avatar = new Avatar(name, PLAYER_COLORS[slot], myChar, slot)
-  avatar.root.position.set(sp.x, 0, sp.z)
-  scene.add(avatar.root)
-  me = { avatar, body: { x: sp.x, z: sp.z, vx: 0, vz: 0 }, facing: sp.rot, character: myChar }
-  camTarget.set(sp.x, 0, sp.z)
+// тряска камеры и красная виньетка
+let shake = 0
+let vignette = 0
+let deathBy = ''
+
+const hooks: MatchHooks = {
+  onKill(killer, victim, w) {
+    const li = document.createElement('li')
+    const name = (f: { name: string; color: number }) => {
+      const b = document.createElement('b')
+      b.textContent = f.name
+      b.style.color = hex(f.color)
+      return b
+    }
+    if (killer) li.append(name(killer), ` ${WEAPON_ICON[w]} `, name(victim))
+    else li.append(name(victim), ' истёк кровью')
+    const feed = $('feed')
+    feed.prepend(li)
+    while (feed.children.length > 5) feed.lastChild!.remove()
+    setTimeout(() => li.remove(), 6000)
+    renderScore()
+  },
+  onLocalHurt(n) { vignette = Math.min(1, vignette + 0.35 + n / 60) },
+  onLocalDeath(killer) {
+    deathBy = killer ? `Тебя уволил(а) ${killer.name}` : 'Истёк(ла) кровью'
+    $('death').hidden = false
+  },
+  onLocalRespawn() { $('death').hidden = true },
+  onShake(p) { shake = Math.max(shake, p) },
+  onWin(w) {
+    $('win-name').textContent = w.name
+    $('win-name').style.color = hex(w.color)
+    $('win-sub').textContent = w === match?.local ? 'Это ты! Премия и грамота на стене.' : `${CHARACTERS[w.character].name} получает премию`
+    $('win').hidden = false
+  },
+  onRoundReset() { $('win').hidden = true; renderScore() },
+  onPickup() { renderHud(true) },
 }
 
 function rosterChanged(): void {
-  if (!net || !me) return
-  const list = net.ordered()
-  list.forEach((p, rank) => {
+  if (!net || !match) return
+  net.ordered().forEach((p, rank) => {
     const color = PLAYER_COLORS[rank % PLAYER_COLORS.length]
-    if (p.id === net!.selfId) {
-      me!.avatar.setColor(color)
-      me!.avatar.setName(p.name, color)
-    } else {
-      let r = remotes.get(p.id)
-      if (!r) {
-        const sp = office.spawns[rank % office.spawns.length]
-        const avatar = new Avatar(p.name, color, p.character, rank)
-        avatar.root.position.set(sp.x, 0, sp.z)
-        scene.add(avatar.root)
-        const b = { x: sp.x, z: sp.z, vx: 0, vz: 0 }
-        r = { avatar, body: { ...b }, target: { ...b }, facing: sp.rot, lastAt: performance.now() }
-        remotes.set(p.id, r)
-      } else {
-        r.avatar.setColor(color)
-        r.avatar.setName(p.name, color)
-      }
-    }
+    if (match!.fighters.has(p.id)) match!.restyle(p.id, p.name, color)
+    else match!.addRemote(p.id, p.name, p.character, color, rank)
   })
-  renderRoster()
+  renderScore()
 }
 
-function removeRemote(id: string): void {
-  const r = remotes.get(id)
-  if (!r) return
-  scene.remove(r.avatar.root)
-  r.avatar.dispose()
-  remotes.delete(id)
-}
-
-function renderRoster(): void {
+/** Таблица: кто сколько убил (до MATCH.killsToWin) */
+function renderScore(): void {
   const ul = $('roster')
   ul.textContent = ''
-  const list = net ? net.ordered() : [{ id: 'me', name: myName, joinedAt: 0, character: myChar }]
-  list.forEach((p, i) => {
+  if (!match) return
+  const list = [...match.fighters.values()].filter((f) => f.kind !== 'dummy').sort((a, b) => b.kills - a.kills)
+  for (const f of list) {
     const li = document.createElement('li')
     const dot = document.createElement('i')
-    dot.style.background = '#' + PLAYER_COLORS[i % 4].toString(16).padStart(6, '0')
-    li.append(dot, document.createTextNode(`${p.name} · ${CHARACTERS[p.character].name}`))
-    if (!net || p.id === net.selfId) li.className = 'me'
+    dot.style.background = hex(f.color)
+    const k = document.createElement('em')
+    k.textContent = String(f.kills)
+    li.append(dot, document.createTextNode(`${f.name} · ${CHARACTERS[f.character].name}`), k)
+    if (f.kind === 'local') li.className = 'me'
     ul.appendChild(li)
-  })
+  }
   const free = GAME.maxPlayers - list.length
   $('net-status').textContent = !net
-    ? 'Тренировка в одиночку'
-    : free > 0 ? `Ждём коллег: свободно мест — ${free}` : 'Комната заполнена'
+    ? 'Тренировка: манекены у кулера'
+    : `До победы ${MATCH.killsToWin} · ` + (free > 0 ? `свободно мест: ${free}` : 'комната заполнена')
+}
+
+let hudKey = ''
+function renderHud(force = false): void {
+  const f = match?.local
+  if (!f) return
+  const w = WEAPONS[f.weapon]
+  const fx: string[] = []
+  if (f.bleed > 0) fx.push('🩸 кровотечение')
+  if (f.slow > 0) fx.push('🐌 мокрый пол')
+  if (f.stun > 0) fx.push('💫 оглушение')
+  if (f.disarm > 0) fx.push('💸 руки заняты')
+  if (f.invuln > 0) fx.push('🛡 только из лифта')
+  const hp = Math.max(0, Math.round(f.hp))
+  const key = `${hp}|${f.weapon}|${f.ammo}|${fx.join()}|${f.dead ? Math.ceil(f.respawnIn) : ''}`
+  if (key === hudKey && !force) return
+  hudKey = key
+  ;($('hp-fill') as HTMLElement).style.width = `${(hp / f.maxHp) * 100}%`
+  $('hp-text').textContent = `${hp} / ${f.maxHp}`
+  $('weapon-name').textContent = `${WEAPON_ICON[f.weapon]} ${w.name}`
+  $('ammo').textContent = f.ammo >= 0 ? `× ${f.ammo}` : ''
+  $('effects').textContent = fx.join(' · ')
+  if (f.dead) $('death-sub').textContent = `${deathBy}. Лифт через ${Math.max(1, Math.ceil(f.respawnIn))}…`
 }
 
 // ---------- меню ----------
@@ -196,12 +239,18 @@ function startGame(code: string | null): void {
   setPreview(null)
   $('menu').hidden = true
   $('hud').hidden = false
+  $('btn-attack').hidden = !window.matchMedia('(pointer: coarse)').matches
 
   if (!code) {
     $('room-code').textContent = 'соло'
     $('btn-invite').hidden = true
-    spawnLocal(myName, 0)
-    renderRoster()
+    match = new Match(scene, office, hooks, null)
+    match.fx.gore = gore
+    match.addLocal('me', myName, myChar, PLAYER_COLORS[0], 0)
+    match.addDummies()
+    camTarget.set(match.local!.body.x, 0, match.local!.body.z)
+    renderScore()
+    renderHud(true)
     return
   }
 
@@ -210,37 +259,38 @@ function startGame(code: string | null): void {
   $('btn-invite').hidden = false
   net = new NetRoom(code, myName, myChar, {
     onPeerHello: () => rosterChanged(),
-    onPeerLeave: (id) => { removeRemote(id); rosterChanged() },
-    onPeerState: (id, s) => {
-      const r = remotes.get(id)
-      if (!r) return
-      r.target = { x: s[0], z: s[1], vx: s[3], vz: s[4] }
-      r.facing = s[2]
-      r.lastAt = performance.now()
-    },
+    onPeerLeave: (id) => { match?.remove(id); rosterChanged() },
+    onPeerState: (id, s) => match?.onState(id, s),
+    onAtk: (id, m) => match?.onAtk(id, m),
+    onHurt: (id, m) => match?.onHurt(id, m),
+    onDie: (id, m) => match?.onDie(id, m),
+    onPick: (id, m) => match?.onPick(id, m),
     onRoomFull: () => backToMenu('В этой комнате уже 4 человека. Создай свою и позови коллег!'),
   })
+  match = new Match(scene, office, hooks, net)
+  match.fx.gore = gore
   // точка появления — по порядку входа; пока никого не видно, считаем себя первым
-  spawnLocal(myName, 0)
+  match.addLocal(net.selfId, myName, myChar, PLAYER_COLORS[0], 0)
+  camTarget.set(match.local!.body.x, 0, match.local!.body.z)
   setTimeout(() => {
-    if (!net || !me) return
+    if (!net || !match?.local) return
     const slot = net.rankOf(net.selfId)
-    const sp = office.spawns[slot % office.spawns.length]
-    // переставляем, только если ещё стоим у стартового лифта
     const sp0 = office.spawns[0]
-    if (slot > 0 && Math.hypot(me.body.x - sp0.x, me.body.z - sp0.z) < 2) {
-      me.body.x = sp.x; me.body.z = sp.z
-    }
+    // переставляем, только если ещё стоим у стартового лифта
+    if (slot > 0 && Math.hypot(match.local.body.x - sp0.x, match.local.body.z - sp0.z) < 2) match.moveLocalToSpawn(slot)
     rosterChanged()
   }, 1500)
-  renderRoster()
+  renderScore()
+  renderHud(true)
 }
 
 function backToMenu(error?: string): void {
   net?.leave()
   net = null
-  for (const id of [...remotes.keys()]) removeRemote(id)
-  if (me) { scene.remove(me.avatar.root); me.avatar.dispose(); me = null }
+  match?.dispose()
+  match = null
+  $('death').hidden = $('win').hidden = true
+  $('feed').textContent = ''
   history.replaceState(null, '', location.pathname)
   $('hud').hidden = true
   $('menu').hidden = false
@@ -283,35 +333,27 @@ const timer = new THREE.Timer()
 timer.connect(document)
 let sendAcc = 0
 let fpsAcc = 0, fpsFrames = 0
+let scoreAcc = 0
 
 function frame(time: number): void {
   timer.update(time)
   const dt = Math.min(timer.getDelta(), 0.05)
+  const me = match?.local
 
-  if (me) {
-    const dir = input.moveDir()
-    const ch = CHARACTERS[me.character]
-    stepBody(me.body, dir.x, dir.z, dt, office.colliders, ch.moveMul, ch.radius)
-    const speed = Math.hypot(me.body.vx, me.body.vz)
-
-    // взгляд: на мышь, а на телефоне — по направлению движения
-    let hasAim = false
-    if (input.hasMouse && !input.touchActive) {
+  if (match && me) {
+    // прицел мышью; на телефоне — автоприцел по ближайшему
+    let aim: number | null = null
+    const mouseAim = input.hasMouse && !input.touchMode
+    if (mouseAim) {
       ray.setFromCamera(input.mouseNdc, camera)
-      if (ray.ray.intersectPlane(aimPlane, aimPoint)) {
-        me.facing = Math.atan2(aimPoint.x - me.body.x, aimPoint.z - me.body.z)
-        hasAim = true
-      }
-    } else if (speed > 0.5) {
-      me.facing = Math.atan2(me.body.vx, me.body.vz)
+      if (ray.ray.intersectPlane(aimPlane, aimPoint)) aim = Math.atan2(aimPoint.x - me.body.x, aimPoint.z - me.body.z)
     }
-    me.avatar.root.position.set(me.body.x, 0, me.body.z)
-    me.avatar.animate(dt, speed, me.facing)
+    match.update(dt, { move: input.moveDir(), aim, attack: input.attacking, autoAim: input.touchMode })
 
     // камера: следует за игроком с небольшим сдвигом к прицелу
-    const lead = hasAim ? GAME.camera.aimLead : 0
-    const tx = me.body.x + (hasAim ? (aimPoint.x - me.body.x) * lead : me.body.vx * 0.12)
-    const tz = me.body.z + (hasAim ? (aimPoint.z - me.body.z) * lead : me.body.vz * 0.12)
+    const lead = aim !== null ? GAME.camera.aimLead : 0
+    const tx = me.body.x + (aim !== null ? (aimPoint.x - me.body.x) * lead : me.body.vx * 0.12)
+    const tz = me.body.z + (aim !== null ? (aimPoint.z - me.body.z) * lead : me.body.vz * 0.12)
     const k = 1 - Math.exp(-GAME.camera.follow * dt)
     camTarget.x += (tx - camTarget.x) * k
     camTarget.z += (tz - camTarget.z) * k
@@ -319,10 +361,12 @@ function frame(time: number): void {
     sendAcc += dt
     if (net && sendAcc >= 1 / GAME.net.sendRateHz) {
       sendAcc = 0
-      const r = (n: number) => Math.round(n * 100) / 100
-      const s: StatePacket = [r(me.body.x), r(me.body.z), r(me.facing), r(me.body.vx), r(me.body.vz)]
-      net.broadcastState(s)
+      const s = match.stateOf()
+      if (s) net.broadcastState(s)
     }
+    renderHud()
+    scoreAcc += dt
+    if (scoreAcc > 0.5) { scoreAcc = 0; renderScore() }
   } else {
     // в меню камера смотрит на выбранного персонажа
     camTarget.set(PREVIEW.x - 2.2, 0, PREVIEW.z + 2.2)
@@ -332,26 +376,23 @@ function frame(time: number): void {
     }
   }
 
-  // чужие игроки: экстраполяция по скорости + сглаживание
-  const now = performance.now()
-  for (const r of remotes.values()) {
-    const age = Math.min((now - r.lastAt) / 1000, 0.25)
-    const px = r.target.x + r.target.vx * age
-    const pz = r.target.z + r.target.vz * age
-    const k = 1 - Math.exp(-14 * dt)
-    r.body.x += (px - r.body.x) * k
-    r.body.z += (pz - r.body.z) * k
-    r.avatar.root.position.set(r.body.x, 0, r.body.z)
-    const speed = age < 0.25 ? Math.hypot(r.target.vx, r.target.vz) : 0
-    r.avatar.animate(dt, speed, lerpAngle(r.avatar.root.userData.f ?? r.facing, r.facing, k))
-    r.avatar.root.userData.f = r.facing
-  }
+  // виньетка: вспышка при попадании + постоянная при малом здоровье
+  vignette = Math.max(0, vignette - dt * 1.6)
+  const low = me && !me.dead ? Math.max(0, 0.45 - me.hp / me.maxHp) * 1.2 : 0
+  ;($('vignette') as HTMLElement).style.opacity = String(Math.min(1, vignette + low))
 
   // в меню камера ближе — крупный план персонажа
-  camZoom += ((me ? 1 : 0.42) - camZoom) * (1 - Math.exp(-4 * dt))
+  camZoom += ((match ? ZOOM : 0.42) - camZoom) * (1 - Math.exp(-4 * dt))
   const far = new URLSearchParams(location.search).has('overview')
   if (far) camTarget.set(0, 0, 0)
   camera.position.copy(camTarget).addScaledVector(camOffset, far ? 2.6 : camZoom)
+  if (shake > 0) {
+    shake = Math.max(0, shake - dt * 2.2)
+    const a = shake * shake * 0.9
+    camera.position.x += (Math.random() - 0.5) * a
+    camera.position.y += (Math.random() - 0.5) * a
+    camera.position.z += (Math.random() - 0.5) * a
+  }
   camera.lookAt(camTarget)
   gfx.render()
 
@@ -363,12 +404,7 @@ function frame(time: number): void {
   requestAnimationFrame(frame)
 }
 
-function lerpAngle(a: number, b: number, t: number): number {
-  let d = b - a
-  while (d > Math.PI) d -= Math.PI * 2
-  while (d < -Math.PI) d += Math.PI * 2
-  return a + d * t
-}
 
 window.addEventListener('beforeunload', () => net?.leave())
 requestAnimationFrame(frame)
+;(window as unknown as { __match: () => Match | null }).__match = () => match
