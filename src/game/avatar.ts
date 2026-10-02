@@ -34,9 +34,10 @@ const LOOKS: Record<CharacterId, Look> = {
     shoes: 0x6b4430,
     accessories: () => {},
   },
-  // Бухгалтер: сиреневая блузка, подтяжки, коричневые брюки, седые волосы
+  // Бухгалтер: сиреневый кардиган, белая блузка, коричневые брюки, седое каре с чёлкой
   accountant: {
-    paint: { Shirt: 0xb3a8d6, Pants: 0x6e5257, Detail: 0x8d82b4, Belt: 0x4b3e48, Hair: 0xe4e2ec, Skin: SKIN, Face: EYES },
+    // халат из пака перекрашен в длинный кардиган, зелёная блузка — в белую
+    paint: { Main: 0xb3a8d6, Black: 0xfbfaf6, Brown: 0x6e5257, Hair: 0xe4e2ec, Skin: SKIN, Face: EYES },
     shoes: 0x4b3e48,
     accessories: (rig, color) => badge(rig, color),
   },

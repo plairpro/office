@@ -268,9 +268,9 @@ function makePortraits(): Record<CharacterId, string> {
   d.position.set(1, 2, 2)
   sc.add(d)
   // крупный план: голова и плечи
-  const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 20)
-  cam.position.set(0.35, 1.6, 1.9)
-  cam.lookAt(0, 1.3, 0)
+  const cam = new THREE.PerspectiveCamera(32, 1, 0.1, 20)
+  cam.position.set(0.35, 1.6, 2.35)
+  cam.lookAt(0, 1.33, 0)
   CHARACTER_ORDER.forEach((c, i) => {
     const a = new Avatar('', PLAYER_COLORS[i], c)
     a.animate(0.4, 0, 0.25)

@@ -544,14 +544,15 @@ html, body {
 :root { --field: #e6f5f0; }
 .field input, .join-row input, .char { border-color: #bfe5da; }
 .btn.cta {
-  background: linear-gradient(135deg, #f6b3b3 0%, #ee8f8a 55%, #e2766f 100%);
-  box-shadow: 0 5px 0 #b9524c, 0 12px 28px rgba(233, 135, 122, 0.4);
+  background: linear-gradient(135deg, #f98a8a 0%, #ee6a66 55%, #df5552 100%);
+  box-shadow: 0 5px 0 #a8403c, 0 12px 28px rgba(230, 95, 90, 0.45);
+  text-shadow: 0 1px 2px rgba(120, 30, 30, 0.3);
 }
-.btn.cta:hover { box-shadow: 0 7px 0 #b9524c, 0 16px 36px rgba(233, 135, 122, 0.5); }
-.btn.cta:active { box-shadow: 0 2px 0 #b9524c, 0 6px 16px rgba(233, 135, 122, 0.35); }
+.btn.cta:hover { box-shadow: 0 7px 0 #a8403c, 0 16px 36px rgba(233, 135, 122, 0.5); }
+.btn.cta:active { box-shadow: 0 2px 0 #a8403c, 0 6px 16px rgba(233, 135, 122, 0.35); }
 .char[aria-pressed='true'] { border-color: #5fb3aa; box-shadow: inset 0 0 0 1px #5fb3aa, 0 4px 14px rgba(95, 179, 170, 0.25); background: #f4fbf9; }
 .field input:focus, .join-row input:focus { border-color: #5fb3aa; }
 .age input { accent-color: #e2766f; }
 .btn.ghost:hover { background: #e6f5f0; }
 .btn.cta { animation-name: cta-breathe-pink; }
-@keyframes cta-breathe-pink { 50% { box-shadow: 0 5px 0 #b9524c, 0 12px 34px rgba(233, 135, 122, 0.6); } }
+@keyframes cta-breathe-pink { 50% { box-shadow: 0 5px 0 #a8403c, 0 12px 34px rgba(233, 135, 122, 0.6); } }

@@ -72,7 +72,7 @@ npm run build:single # всё в одном HTML-файле → dist-single/inde
 Сборка: `node tools/build-assets.mjs <папка с клонами паков>` → `src/assets/*.glb` (сжатие meshopt).
 
 Персонажи — CC0-пак **Ultimate Animated Character Pack** от Quaternius (quaternius.com): босс — Suit_Male,
-курьер — Casual_Male, бухгалтер — OldClassy_Female (без цилиндра), секретарь — Suit_Female. Сборка:
+курьер — Casual_Male, бухгалтер — Doctor_Female_Young, секретарь — Suit_Female. Сборка:
 `node tools/build-office-chars.mjs <папка с распакованными паками>` → `src/assets/office_*.glb`
 (без лишних анимаций, ≈0.35 МБ на всех). Одежда перекрашивается по материалам, цвет игрока —
 на галстуке, кепке и бейдже (`src/game/avatar.ts`). Лицензии — `ASSETS_LICENSES.txt`.

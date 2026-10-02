@@ -12,7 +12,7 @@ const DIR = path.join(SRC, 'Ultimate Animated Character Pack - Nov 2019/glTF')
 const CHARS = {
   boss: path.join(DIR, 'Suit_Male.gltf'),
   courier: path.join(DIR, 'Casual_Male.gltf'),
-  accountant: path.join(DIR, 'OldClassy_Female.gltf'),
+  accountant: path.join(DIR, 'Doctor_Female_Young.gltf'),
   secretary: path.join(DIR, 'Suit_Female.gltf'),
 }
 const KEEP = new Set(['Idle', 'Run', 'Walk', 'SwordSlash', 'Shoot_OneHanded', 'RecieveHit', 'Death', 'Roll'])
