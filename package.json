@@ -10,8 +10,8 @@
     "build:single": "vite build --config vite.single.config.ts"
   },
   "dependencies": {
-    "three": "^0.186.1",
-    "trystero": "^0.25.4"
+    "mqtt": "^5.16.0",
+    "three": "^0.186.1"
   },
   "devDependencies": {
     "@gltf-transform/core": "^4.5.1",

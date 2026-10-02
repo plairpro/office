@@ -21,7 +21,7 @@
     <div id="menu" class="overlay">
       <div class="card">
         <div class="logo">Офис</div>
-        <p class="tagline" id="menu-tagline">Быстрый PvP на 2–4 коллег. Зайди, позови друзей по ссылке — а пока бей манекенов.</p>
+        <p class="tagline" id="menu-tagline">Нажми «Войти в офис» — появится твоя комната и ссылка для коллег. Пока они идут, бей манекенов.</p>
         <label class="field">
           <span>Как тебя зовут в офисе?</span>
           <input id="name" maxlength="16" autocomplete="nickname" placeholder="Например, Бухгалтер Света" />
@@ -48,6 +48,13 @@
         <div id="effects" class="effects"></div>
       </div>
       <ul id="feed"></ul>
+      <div id="invite-card" hidden>
+        <button id="ic-close" aria-label="Скрыть">×</button>
+        <div class="ic-title">Комната <b id="ic-code"></b></div>
+        <p>Отправь ссылку коллегам — они сразу окажутся здесь. До 4 человек.</p>
+        <div class="ic-link" id="ic-link"></div>
+        <div class="ic-btns"><button id="ic-copy" class="btn cta">Скопировать ссылку</button><button id="ic-share" class="btn primary">Поделиться</button></div>
+      </div>
       <div id="death" hidden><b>УВОЛЕН</b><span id="death-sub"></span></div>
       <div id="win" hidden><div class="win-card"><small>Сотрудник месяца</small><b id="win-name"></b><span id="win-sub"></span><small>Новый раунд через несколько секунд</small></div></div>
       <div class="panel fps"><span id="fps"></span>

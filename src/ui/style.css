@@ -412,3 +412,23 @@ html, body {
   .char .stats { font-size: 11px; }
   .btn.cta { padding: 12px; font-size: 16px; }
 }
+
+/* Приглашение: пока в комнате никого */
+#invite-card {
+  position: absolute; left: 50%; top: max(14px, env(safe-area-inset-top)); transform: translateX(-50%);
+  width: min(420px, calc(100% - 140px)); pointer-events: auto; text-align: center;
+  background: rgba(255, 250, 246, 0.94); border-radius: 18px; padding: 14px 16px 14px;
+  box-shadow: 0 14px 40px rgba(61, 53, 87, 0.22);
+}
+#invite-card .ic-title { font-size: 14px; color: var(--muted); }
+#invite-card .ic-title b { font-size: 24px; letter-spacing: 3px; color: var(--text); margin-left: 6px; }
+#invite-card p { margin: 6px 0 8px; font-size: 13px; }
+#invite-card .ic-link { font: 12px ui-monospace, Menlo, monospace; color: var(--muted); background: var(--field); border-radius: 8px; padding: 6px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; -webkit-user-select: all; user-select: all; }
+#invite-card .ic-btns { display: flex; gap: 8px; margin-top: 10px; }
+#invite-card .ic-btns .btn { flex: 1; padding: 10px; font-size: 14px; }
+#ic-close { position: absolute; top: 6px; right: 8px; border: 0; background: none; font-size: 20px; color: var(--muted); cursor: pointer; }
+@media (pointer: coarse), (max-height: 560px) {
+  #invite-card { padding: 10px 12px; width: min(360px, calc(100% - 120px)); }
+  #invite-card p { display: none; }
+  #invite-card .ic-title b { font-size: 18px; }
+}

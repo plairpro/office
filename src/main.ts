@@ -6,7 +6,7 @@ import { Avatar } from './game/avatar'
 import { Match, type MatchHooks } from './game/match'
 import { sfx } from './game/sfx'
 import { Input } from './game/input'
-import { NetRoom, makeRoomCode, readRoomCode, iceServers } from './net/room'
+import { NetRoom, makeRoomCode, readRoomCode } from './net/room'
 import { $, showToast, loadName, saveName, loadPref, savePref } from './ui/dom'
 import { loadAssets } from './assets'
 
@@ -23,8 +23,6 @@ await loadAssets((p) => { mainBtn.textContent = `Загружаем офис… 
 mainBtn.textContent = mainLabel
 mainBtn.disabled = false
 
-// ICE-серверы считаем заранее, пока игрок в меню
-const ice = iceServers()
 const office = buildOffice()
 const camera = new THREE.PerspectiveCamera(GAME.camera.fov, 1, 0.5, 120)
 const gfx = new Renderer(host, camera, office.sunDir)
@@ -134,7 +132,7 @@ const hooks: MatchHooks = {
 
 function rosterChanged(): void {
   if (!net || !match) return
-  if (net.peers.size > 0) match.removeDummies()
+  if (net.peers.size > 0) { match.removeDummies(); $('invite-card').hidden = true }
   net.ordered().forEach((p, rank) => {
     const color = PLAYER_COLORS[rank % PLAYER_COLORS.length]
     if (match!.fighters.has(p.id)) match!.restyle(p.id, p.name, color)
@@ -173,7 +171,7 @@ function renderScore(): void {
   if (net) {
     const r = net.relaysOnline()
     // пока никого нет — показываем, на связи ли серверы поиска: так понятно, где ломается
-    netLine = list.length > 1 ? '' : r.open === 0 ? ' · ⚠ нет связи с поиском' : ` · поиск ${r.open}/${r.total}`
+    netLine = list.length > 1 ? '' : r.open === 0 ? ' · ⚠ нет связи с сервером' : ` · связь ${r.open}/${r.total}`
   }
   $('net-status').textContent = !net
     ? 'тренировка'
@@ -346,7 +344,7 @@ async function startGame(code: string | null): Promise<void> {
   $('room-code').textContent = code
   $('btn-invite').hidden = false
   net = new NetRoom(code, myName, myChar, {
-    onJoinError: () => showToast('Коллега нашёлся, но сеть не пускает соединение. Пробуем через ретранслятор…', 5000),
+    onLink: () => renderScore(),
     onPeerHello: () => rosterChanged(),
     onPeerLeave: (id) => { match?.remove(id); rosterChanged() },
     onPeerState: (id, s) => match?.onState(id, s),
@@ -355,8 +353,12 @@ async function startGame(code: string | null): Promise<void> {
     onDie: (id, m) => match?.onDie(id, m),
     onPick: (id, m) => match?.onPick(id, m),
     onRoomFull: () => backToMenu('В этой комнате уже 4 человека. Создай свою и позови коллег!'),
-  }, await ice)
+  })
   match = new Match(scene, office, hooks, net)
+  // карточка-приглашение, пока в комнате никого
+  $('ic-code').textContent = code
+  $('ic-link').textContent = inviteUrl(code)
+  $('invite-card').hidden = false
   match.fx.gore = gore
   // точка появления — по порядку входа; пока никого не видно, считаем себя первым
   match.addLocal(net.selfId, myName, myChar, PLAYER_COLORS[0], 0)
@@ -380,6 +382,7 @@ function backToMenu(error?: string): void {
   match?.dispose()
   match = null
   $('death').hidden = $('win').hidden = true
+  $('invite-card').hidden = true
   $('feed').textContent = ''
   history.replaceState(null, '', location.pathname)
   $('hud').hidden = true
@@ -395,9 +398,28 @@ function backToMenu(error?: string): void {
 $('btn-main').addEventListener('click', () => void startGame(readRoomCode() ?? makeRoomCode()))
 nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-main').click() })
 
+function inviteUrl(code: string): string {
+  return `${location.href.split('#')[0].split('?')[0]}#${code}`
+}
+
+async function copyInvite(): Promise<void> {
+  if (!net) return
+  const url = inviteUrl(net.code)
+  try {
+    await navigator.clipboard.writeText(`${myName} зовёт тебя в «Офис» — заходи, будем драться степлерами:\n${url}`)
+    showToast('Ссылка скопирована — кинь её в рабочий чат', 3500)
+  } catch {
+    window.prompt('Скопируй ссылку и отправь коллегам:', url)
+  }
+}
+$('ic-copy').addEventListener('click', () => void copyInvite())
+$('ic-share').addEventListener('click', () => $('btn-invite').click())
+$('ic-close').addEventListener('click', () => { $('invite-card').hidden = true })
+if (!navigator.share) $('ic-share').hidden = true
+
 $('btn-invite').addEventListener('click', async () => {
   if (!net) return
-  const url = `${location.href.split('#')[0]}#${net.code}`
+  const url = inviteUrl(net.code)
   const text = `${myName} вызывает тебя на офисную разборку! Комната ${net.code}`
   const coarse = window.matchMedia('(pointer: coarse)').matches
   if (coarse && navigator.share) {
