@@ -520,9 +520,13 @@ html, body {
 .overlay > .card { max-width: 100%; min-width: 0; justify-self: center; }
 #chars { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .char { min-width: 0; }
+/* карточка персонажа: имя сверху по левому краю, под ним портрет и статы — длинные имена не обрезаются */
+.char { flex-direction: column !important; align-items: stretch !important; gap: 4px !important; padding: 7px 8px 8px !important; }
+.char > b { font-size: 14px; line-height: 1.15; text-align: left; white-space: nowrap; }
+.char .info { flex-direction: row !important; align-items: center; gap: 8px !important; }
 @media (max-width: 420px) {
-  .char img { width: 38px !important; height: 38px !important; }
-  .char b, .char .info b { font-size: 12px !important; letter-spacing: -0.2px; }
-  .char { gap: 6px !important; padding: 6px !important; }
-  .char .info b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .char img { width: 40px !important; height: 40px !important; }
+  .char > b { font-size: 13px; }
 }
+/* на широком экране меню прижато к левому краю */
+@media (min-width: 900px) { #menu > .card { justify-self: start; } }

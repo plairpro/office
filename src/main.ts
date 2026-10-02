@@ -303,7 +303,7 @@ function renderCharacters(): void {
       stat('⚔️', pct(c.attackSpeedMul), c.attackSpeedMul > 1, 'Скорость атаки'),
       c.dodge ? `<span class="up" title="Шанс уклониться">🌀 ${Math.round(c.dodge * 100)}%</span>` : '',
     ].filter(Boolean)
-    btn.innerHTML = `<img src="${PORTRAITS[id]}" alt=""><span class="info"><b>${c.name}</b><span class="stats">${parts.join('')}</span></span>`
+    btn.innerHTML = `<b>${c.name}</b><span class="info"><img src="${PORTRAITS[id]}" alt=""><span class="stats">${parts.join('')}</span></span>`
     btn.addEventListener('click', () => {
       myChar = id
       savePref('character', id)
