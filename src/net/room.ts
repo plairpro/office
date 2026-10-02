@@ -66,14 +66,16 @@ const PEER_TIMEOUT = 10000 // молчит дольше — считаем, чт
 
 type Envelope = { f: string; s: number; k: string; d: unknown; to?: string }
 
-export const selfId = Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 12)
+/** Новый id на каждый вход в офис: иначе после повторного входа номера сообщений начинаются заново
+ *  и остальные игроки отбрасывают их как уже полученные (игрок «пропадает», удары не доходят) */
+const newId = () => Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 12)
 
 /**
  * Комната: все участники подписаны на один топик и рассылают туда свои сообщения.
  * Своего сервера нет — только чужие бесплатные брокеры.
  */
 export class NetRoom {
-  readonly selfId = selfId
+  readonly selfId = newId()
   readonly joinedAt = Date.now()
   readonly peers = new Map<string, PeerInfo>()
   private clients: MqttClient[] = []
@@ -105,13 +107,13 @@ export class NetRoom {
 
     BROKERS.forEach((url, bi) => {
       const c = mqtt.connect(url, {
-        clientId: `or_${selfId}_${Math.random().toString(36).slice(2, 6)}`,
+        clientId: `or_${this.selfId}_${Math.random().toString(36).slice(2, 6)}`,
         clean: true,
         connectTimeout: 8000,
         reconnectPeriod: 3000,
         keepalive: 20,
         // если вкладку закрыли — брокер сам сообщит остальным
-        will: { topic: this.topic, payload: JSON.stringify({ f: selfId, s: -1, k: 'bye', d: null }), qos: 0, retain: false },
+        will: { topic: this.topic, payload: JSON.stringify({ f: this.selfId, s: -1, k: 'bye', d: null }), qos: 0, retain: false },
       })
       c.on('connect', () => {
         c.subscribe(this.topic, { qos: 0 })
@@ -137,7 +139,7 @@ export class NetRoom {
 
   private send(k: string, d: unknown, to?: string): void {
     if (this.left) return
-    const env: Envelope = { f: selfId, s: ++this.seq, k, d }
+    const env: Envelope = { f: this.selfId, s: ++this.seq, k, d }
     if (to) env.to = to
     const payload = JSON.stringify(env)
     for (const c of this.clients) if (c.connected) c.publish(this.topic, payload, { qos: 0 })
@@ -147,8 +149,8 @@ export class NetRoom {
   private receive(buf: Uint8Array): void {
     let env: Envelope
     try { env = JSON.parse(new TextDecoder().decode(buf)) } catch { return }
-    if (!env || typeof env.f !== 'string' || env.f === selfId || typeof env.k !== 'string') return
-    if (env.to && env.to !== selfId) return
+    if (!env || typeof env.f !== 'string' || env.f === this.selfId || typeof env.k !== 'string') return
+    if (env.to && env.to !== this.selfId) return
     if (env.k === 'bye') {
       // «прощание» от брокера (s = -1) приходит и при коротком обрыве с одним из брокеров —
       // если игрок только что был слышен через другой, не выкидываем его
@@ -182,7 +184,7 @@ export class NetRoom {
         if (!prev) this.hello(id) // новичку сразу отвечаем, не дожидаясь таймера
         // двое заняли один лифт — уступает тот, кто зашёл позже
         if (info.slot >= 0 && info.slot === this.mySlot &&
-          (info.joinedAt < this.joinedAt || (info.joinedAt === this.joinedAt && id < selfId))) {
+          (info.joinedAt < this.joinedAt || (info.joinedAt === this.joinedAt && id < this.selfId))) {
           const free = this.freeSlot()
           if (free < 0) { this.leave(); this.ev.onRoomFull(); return }
           this.mySlot = free
