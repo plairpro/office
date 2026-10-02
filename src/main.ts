@@ -60,6 +60,8 @@ muteBtn.addEventListener('click', () => { setMute(!sfx.muted); muteBtn.blur() })
 // настройки (fps, звук, кровь, графика) прячутся за шестерёнкой, чтобы не занимать экран
 $('btn-settings').addEventListener('click', () => { document.querySelector('.fps')!.classList.toggle('open'); ($('btn-settings') as HTMLButtonElement).blur() })
 
+$('build').textContent = `v${__BUILD__.slice(5).replace('T', ' ')}`
+
 const goreSelect = $('gore') as HTMLSelectElement
 goreSelect.value = loadPref('gore') === 'off' ? 'off' : 'on'
 goreSelect.addEventListener('change', () => {
