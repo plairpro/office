@@ -18,27 +18,32 @@ const EYES = 0x2f2d3d
 
 /** 'P' — цвет игрока */
 type Paint = Record<string, number | 'P'>
-type Look = { paint: Paint; accessories: (rig: Rig, color: number) => void }
+/** shoes — цвет обуви: у моделей ступни и голени из того же материала, что и кожа */
+type Look = { paint: Paint; shoes: number; accessories: (rig: Rig, color: number) => void }
 
 const LOOKS: Record<CharacterId, Look> = {
   // Курьер: оранжевая футболка доставки, джинсы, кепка цвета игрока
   courier: {
     paint: { Shirt: 0xf2a03f, Pants: 0x5f7fae, Belt: 0x4b392d, Hair: 0x5a3a22, Skin: SKIN, Face: EYES },
+    shoes: 0xf4f3f7,
     accessories: (rig, color) => { cap(rig, color); badge(rig, color) },
   },
   // Босс: бежевый костюм, белая рубашка, галстук цвета игрока, седина
   boss: {
     paint: { Black: 0xcdb48e, Shirt: 0xfbfaf6, Details: 'P', Belt: 0x6b4430, Hair: 0xc9c4bd, Skin: SKIN, Face: EYES },
+    shoes: 0x6b4430,
     accessories: () => {},
   },
   // Бухгалтер: сиреневая блузка, подтяжки, коричневые брюки, седые волосы
   accountant: {
     paint: { Shirt: 0xb3a8d6, Pants: 0x6e5257, Detail: 0x8d82b4, Belt: 0x4b3e48, Hair: 0xe4e2ec, Skin: SKIN, Face: EYES },
+    shoes: 0x4b3e48,
     accessories: (rig, color) => badge(rig, color),
   },
   // Секретарь: тёмно-синий костюм, белая блузка, галстук цвета игрока, каштановые волосы
   secretary: {
     paint: { Black: 0x3e3b70, Shirt: 0xfbfaf6, Details: 'P', Belt: 0x2f2d3d, Hair: 0x7a4a2c, Skin: SKIN, Face: EYES },
+    shoes: 0x2f2d3d,
     accessories: () => {},
   },
 }
@@ -56,7 +61,48 @@ function lighten(hex: number, k: number): number {
   return new THREE.Color(hex).lerp(new THREE.Color(0xffffff), k).getHex()
 }
 
+/**
+ * Обувь: вершины «кожи», которые двигают кости стоп и голеней, красим в цвет обуви (цвет вершин).
+ * Геометрия общая у всех копий персонажа — считаем один раз.
+ */
+function paintShoes(mesh: THREE.SkinnedMesh, shoes: number): void {
+  const g = mesh.geometry
+  if (g.userData.shoes === shoes) return
+  g.userData.shoes = shoes
+  const legs = new Set(mesh.skeleton.bones.map((b, i) => (/^(Foot|LowerLeg)/.test(b.name) ? i : -1)).filter((i) => i >= 0))
+  const si = g.attributes.skinIndex, sw = g.attributes.skinWeight
+  const skin = new THREE.Color(SKIN), shoe = new THREE.Color(shoes)
+  const col = new Float32Array(si.count * 3)
+  for (let i = 0; i < si.count; i++) {
+    let w = 0
+    for (let k = 0; k < 4; k++) if (legs.has(si.getComponent(i, k))) w += sw.getComponent(i, k)
+    ;(w >= 0.5 ? shoe : skin).toArray(col, i * 3)
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3))
+}
+
 // ---------- аксессуары ----------
+
+/** Ботинки: у мультяшной модели вместо ступней крошечные кончики, сверху ног не видно — надеваем крупную обувь */
+function shoes(rig: Rig, hex: number): void {
+  const total = rig.box('Head').max.y // рост модели в её единицах (макушка — верх головы)
+  const u = total / 3.27
+  const m = mat(hex, rig)
+  const sole = mat(0xfbf7f1, rig)
+  for (const side of ['L', 'R']) {
+    const foot = rig.bone(`Foot.${side}`)
+    const g = new THREE.Group()
+    const body = new THREE.Mesh(geo(new THREE.SphereGeometry(1, 14, 10), rig), m)
+    body.scale.set(0.11 * u, 0.075 * u, 0.19 * u)
+    body.position.set(0, 0.07 * u, 0.05 * u)
+    const s2 = new THREE.Mesh(geo(new THREE.CylinderGeometry(1, 1, 1, 14), rig), sole)
+    s2.scale.set(0.11 * u, 0.025 * u, 0.19 * u)
+    s2.position.set(0, 0.015 * u, 0.05 * u)
+    g.add(body, s2)
+    rig.attach(`Foot.${side}`, g, new THREE.Vector3(foot.x, -0.02 * u, foot.z))
+  }
+}
+
 
 interface Rig {
   /** габариты части тела в пространстве модели (поза покоя, до масштабирования) */
@@ -176,6 +222,11 @@ export class Avatar {
         cache.set(src.name, m)
       }
       o.material = m
+      if (src.name === 'Skin' && o instanceof THREE.SkinnedMesh) {
+        paintShoes(o, look.shoes)
+        m.vertexColors = true
+        m.color.setHex(0xffffff)
+      }
     })
 
     // анимации; аксессуары и оружие крепим в стойке (а не в исходной Т-позе) — так они сидят как надо
@@ -185,7 +236,7 @@ export class Avatar {
       if (clip) this.actions.set(key, this.mixer.clipAction(clip))
     }
     this.play('idle', 0)
-    this.mixer.update(0.4)
+    this.tick(0.4)
     const model = this.model
     model.updateMatrixWorld(true)
     const tq = new THREE.Quaternion(), tv = new THREE.Vector3(), ts = new THREE.Vector3()
@@ -234,6 +285,7 @@ export class Avatar {
       disposables: this.disposables,
     }
     look.accessories(rig, color)
+    shoes(rig, look.shoes)
     // гнездо для оружия: в кулаке правой руки, оси — как у модели в стойке (вперёд = +Z)
     const grip = rig.bone('Fist.R')
     rig.attach('Fist.R', this.socket, grip)
@@ -266,7 +318,7 @@ export class Avatar {
 
     this.root.add(this.model)
     this.play('idle', 0)
-    this.mixer.update(0) // сразу встаём в стойку, без кадра в исходной позе
+    this.tick(0) // сразу встаём в стойку, без кадра в исходной позе
 
     // мягкая тень под ногами: солнце в офисе закрыто потолком, поэтому контактная тень рисуется отдельно
     const r = CHARACTERS[character].radius
@@ -339,6 +391,12 @@ export class Avatar {
     // без предыдущей анимации сразу полный вес: проявление «из нуля» смешивается с исходной Т-позой (руки в стороны)
     else next.setEffectiveWeight(1)
     this.current = next
+  }
+
+  /** Шаг анимации */
+  private tick(dt: number): void {
+    this.mixer.update(dt)
+
   }
 
   /** Разовая анимация поверх бега: удар, выстрел, получение урона */
@@ -435,7 +493,7 @@ export class Avatar {
     // появляемся сразу в стойке: плавное проявление из нуля показывало бы руки в стороны (исходная поза модели)
     this.play('idle', 0)
     this.actions.get('idle')?.setEffectiveWeight(1)
-    this.mixer.update(0)
+    this.tick(0)
   }
 
   /** Цвет игрока зависит от порядка входа — при смене пересобираем перекраску */
@@ -468,7 +526,7 @@ export class Avatar {
       for (const m of this.mats) m.emissive.copy(this.flashColor).multiplyScalar(f)
     }
     if (this.dead) {
-      this.mixer.update(dt)
+      this.tick(dt)
       // анимация смерти каждый кадр возвращает кости масштаб 1 — голову прячем после неё
       if (this.headless) this.head?.scale.setScalar(0.001)
       return
@@ -481,7 +539,7 @@ export class Avatar {
     else this.play('idle')
     const run = this.actions.get('run')
     if (run && this.current === run) run.timeScale = 0.75 + k * 0.45
-    this.mixer.update(dt)
+    this.tick(dt)
     // степлер и деньгомёт всегда смотрят туда же, куда персонаж — так понятно, куда полетит
     if (this.weaponObj && (this.weaponId === 'stapler' || this.weaponId === 'moneygun')) {
       this.socket.updateWorldMatrix(true, false)
