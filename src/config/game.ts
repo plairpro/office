@@ -133,7 +133,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   // вплотную (1 м): сильный удар с заметным замахом, оглушает на 2 с
   lamp: {
     id: 'lamp', name: 'Настольная лампа', type: 'melee',
-    range: 1.0, damage: 36, cooldown: 1.2, windup: 0.42, arc: 100,
+    range: 1.0, damage: 5, cooldown: 1.2, windup: 0.42, arc: 100,
     effects: [{ kind: 'stun', seconds: 2 }],
     clip: '2H_Melee_Attack_Chop', animSpeed: 1.3,
   },

@@ -489,8 +489,16 @@ export class Avatar {
     this.mixer = new THREE.AnimationMixer(this.model)
     this.mixer.addEventListener('finished', (e) => {
       if (e.action === this.oneShot) {
-        this.oneShot.fadeOut(0.15)
+        // плавно возвращаемся в стойку прямо из разовой анимации: если сначала погасить её, а потом
+        // проявлять стойку, веса на миг дают меньше 1 и персонаж разводит руки в исходную «Т-позу»
+        const prev = this.oneShot
         this.oneShot = null
+        const idle = this.actions.get('idle')
+        if (idle && !this.dead) {
+          idle.reset().setEffectiveWeight(1).play()
+          idle.crossFadeFrom(prev, 0.15, false)
+          this.current = idle
+        } else prev.fadeOut(0.15)
       }
     })
 
@@ -502,6 +510,7 @@ export class Avatar {
       if (clip) this.actions.set(key, this.mixer.clipAction(clip))
     }
     this.play('idle', 0)
+    this.mixer.update(0) // сразу встаём в стойку, без кадра в исходной позе
 
     // мягкая тень под ногами: солнце в офисе закрыто потолком, поэтому контактная тень рисуется отдельно
     const r = CHARACTERS[character].radius
@@ -571,7 +580,8 @@ export class Avatar {
     if (!next || next === this.current) return
     next.reset().play()
     if (this.current) next.crossFadeFrom(this.current, fade, true)
-    else next.fadeIn(fade)
+    // без предыдущей анимации сразу полный вес: проявление «из нуля» смешивается с исходной Т-позой (руки в стороны)
+    else next.setEffectiveWeight(1)
     this.current = next
   }
 
@@ -586,8 +596,9 @@ export class Avatar {
     a.clampWhenFinished = false
     a.timeScale = speed
     a.setEffectiveWeight(1)
-    a.fadeIn(0.05).play()
-    if (this.current) { this.current.fadeOut(0.05); this.current = null }
+    a.play()
+    if (this.current) { a.crossFadeFrom(this.current, 0.05, false); this.current = null }
+    else a.fadeIn(0.05)
     if (this.oneShot && this.oneShot !== a) this.oneShot.fadeOut(0.05)
     this.oneShot = a
   }
@@ -662,8 +673,13 @@ export class Avatar {
     this.head?.scale.setScalar(1)
     this.ring.visible = true
     this.model.visible = true
+    this.mixer.stopAllAction()
+    this.oneShot = null
     this.current = null
-    this.play('idle', 0.05)
+    // появляемся сразу в стойке: плавное проявление из нуля показывало бы руки в стороны (исходная поза модели)
+    this.play('idle', 0)
+    this.actions.get('idle')?.setEffectiveWeight(1)
+    this.mixer.update(0)
   }
 
   /** Цвет игрока зависит от порядка входа — при смене пересобираем перекраску */

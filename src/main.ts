@@ -217,7 +217,7 @@ function renderHud(force = false): void {
 
 // ---------- меню ----------
 
-const PREVIEW = { x: 1.2, z: 1.0 }
+const PREVIEW = { x: -3.5, z: 5.5 } // свободный пол, без мебели под ногами
 // в меню все четверо стоят в ряд лицом к камере, выбранный выходит вперёд
 const lineup = new Map<CharacterId, Avatar>()
 const SCREEN_RIGHT = { x: Math.SQRT1_2, z: -Math.SQRT1_2 }
@@ -251,7 +251,7 @@ function setPreview(id: CharacterId | null): void {
     const fwd = sel ? 0.7 : 0
     a.root.position.set(PREVIEW.x + SCREEN_RIGHT.x * k + fwd * Math.SQRT1_2, 0, PREVIEW.z + SCREEN_RIGHT.z * k + fwd * Math.SQRT1_2)
     a.root.scale.setScalar(sel ? 1.12 : 0.92)
-    if (sel) a.action('Cheer', 1.2)
+    if (sel) a.action('Unarmed_Melee_Attack_Punch_A', 1)
   })
 }
 
@@ -645,6 +645,7 @@ function frame(time: number): void {
 window.addEventListener('beforeunload', () => net?.leave())
 window.addEventListener('pagehide', () => net?.leave())
 requestAnimationFrame(frame)
+;(window as unknown as { __office: unknown }).__office = office
 ;(window as unknown as { __match: () => Match | null }).__match = () => match
 ;(window as unknown as { __net: () => NetRoom | null }).__net = () => net
 ;(window as unknown as { __cam: unknown }).__cam = camera
