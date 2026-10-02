@@ -201,6 +201,10 @@ export class Match {
     spots.forEach(([x, z, c], i) => this.makeFighter(`dummy${i}`, 'Манекен', c, MV.lavender, 'dummy', x, z, Math.random() * 6))
   }
 
+  removeDummies(): void {
+    for (const f of [...this.fighters.values()]) if (f.kind === 'dummy') this.remove(f.id)
+  }
+
   remove(id: string): void {
     const f = this.fighters.get(id)
     if (!f) return

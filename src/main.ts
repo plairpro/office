@@ -16,13 +16,12 @@ const host = $('game')
 
 // ---------- загрузка моделей ----------
 const mainBtn = $('btn-main') as HTMLButtonElement
-const soloBtn = $('btn-solo') as HTMLButtonElement
 const mainLabel = mainBtn.textContent
-mainBtn.disabled = soloBtn.disabled = true
+mainBtn.disabled = true
 mainBtn.textContent = 'Загружаем офис… 0%'
 await loadAssets((p) => { mainBtn.textContent = `Загружаем офис… ${Math.round(p * 100)}%` })
 mainBtn.textContent = mainLabel
-mainBtn.disabled = soloBtn.disabled = false
+mainBtn.disabled = false
 
 // ICE-серверы считаем заранее, пока игрок в меню
 const ice = iceServers()
@@ -132,6 +131,7 @@ const hooks: MatchHooks = {
 
 function rosterChanged(): void {
   if (!net || !match) return
+  if (net.peers.size > 0) match.removeDummies()
   net.ordered().forEach((p, rank) => {
     const color = PLAYER_COLORS[rank % PLAYER_COLORS.length]
     if (match!.fighters.has(p.id)) match!.restyle(p.id, p.name, color)
@@ -195,19 +195,72 @@ function renderHud(force = false): void {
 // ---------- меню ----------
 
 const PREVIEW = { x: 1.2, z: 1.0 }
-let preview: Avatar | null = null
+// в меню все четверо стоят в ряд лицом к камере, выбранный выходит вперёд
+const lineup = new Map<CharacterId, Avatar>()
+const SCREEN_RIGHT = { x: Math.SQRT1_2, z: -Math.SQRT1_2 }
+const FACE_CAMERA = Math.PI / 4
+// персонажи меню рисуются отдельным слоем поверх офиса — их не заслоняет мебель
+const menuScene = new THREE.Scene()
+menuScene.add(new THREE.HemisphereLight(0xffe9e4, 0x9fcfd0, 2.0))
+const menuSun = new THREE.DirectionalLight(0xfff0e2, 2.2)
+menuSun.position.set(4, 8, 6)
+menuScene.add(menuSun)
 let myChar: CharacterId = (CHARACTER_ORDER as string[]).includes(loadPref('character') ?? '')
   ? (loadPref('character') as CharacterId)
   : 'courier'
 
 function setPreview(id: CharacterId | null): void {
-  if (preview) { scene.remove(preview.root); preview.dispose(); preview = null }
-  if (!id) return
-  preview = new Avatar(CHARACTERS[id].name, PLAYER_COLORS[0], id)
-  preview.root.position.set(PREVIEW.x, 0, PREVIEW.z)
-  preview.root.rotation.y = 0.8
-  scene.add(preview.root)
+  if (!id) {
+    for (const a of lineup.values()) { menuScene.remove(a.root); a.dispose() }
+    lineup.clear()
+    return
+  }
+  CHARACTER_ORDER.forEach((c, i) => {
+    let a = lineup.get(c)
+    if (!a) {
+      a = new Avatar(CHARACTERS[c].name, PLAYER_COLORS[i], c)
+      a.showLabel(false)
+      menuScene.add(a.root)
+      lineup.set(c, a)
+    }
+    const k = (i - 1.5) * 1.3
+    const sel = c === id
+    const fwd = sel ? 0.7 : 0
+    a.root.position.set(PREVIEW.x + SCREEN_RIGHT.x * k + fwd * Math.SQRT1_2, 0, PREVIEW.z + SCREEN_RIGHT.z * k + fwd * Math.SQRT1_2)
+    a.root.scale.setScalar(sel ? 1.12 : 0.92)
+    if (sel) a.action('Cheer', 1.2)
+  })
 }
+
+/** Портреты персонажей для карточек меню — рисуем 3D-модели в маленький холст */
+function makePortraits(): Record<CharacterId, string> {
+  const out = {} as Record<CharacterId, string>
+  const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true })
+  r.setSize(128, 128)
+  r.outputColorSpace = THREE.SRGBColorSpace
+  r.toneMapping = THREE.NeutralToneMapping
+  const sc = new THREE.Scene()
+  sc.add(new THREE.HemisphereLight(0xffe9e4, 0x9fcfd0, 2.2))
+  const d = new THREE.DirectionalLight(0xfff0e2, 2.2)
+  d.position.set(1, 2, 2)
+  sc.add(d)
+  const cam = new THREE.PerspectiveCamera(26, 1, 0.1, 20)
+  cam.position.set(0.55, 1.5, 2.3)
+  cam.lookAt(0, 1.3, 0)
+  CHARACTER_ORDER.forEach((c, i) => {
+    const a = new Avatar('', PLAYER_COLORS[i], c)
+    a.animate(0.4, 0, 0.25)
+    sc.add(a.root)
+    r.render(sc, cam)
+    out[c] = r.domElement.toDataURL('image/png')
+    sc.remove(a.root)
+    a.dispose()
+  })
+  r.dispose()
+  r.forceContextLoss()
+  return out
+}
+const PORTRAITS = makePortraits()
 
 function pct(mul: number): string {
   const v = Math.round((mul - 1) * 100)
@@ -223,15 +276,16 @@ function renderCharacters(): void {
     btn.className = 'char'
     btn.type = 'button'
     btn.setAttribute('aria-pressed', String(id === myChar))
-    const stat = (label: string, v: string, good: boolean) =>
-      v ? `<span class="${good ? 'up' : 'down'}">${label} ${v}</span>` : ''
+    const stat = (icon: string, v: string, good: boolean, title: string) =>
+      v ? `<span class="${good ? 'up' : 'down'}" title="${title}">${icon} ${v}</span>` : ''
     const parts = [
-      `<span class="${c.hp >= 100 ? 'up' : 'down'}">❤ ${c.hp}</span>`,
-      stat('бег', pct(c.moveMul), c.moveMul > 1),
-      stat('атака', pct(c.attackSpeedMul), c.attackSpeedMul > 1),
-      c.dodge ? `<span class="up">уклон ${Math.round(c.dodge * 100)}%</span>` : '',
+      `<span class="${c.hp >= 100 ? 'up' : 'down'}" title="Здоровье">❤️ ${c.hp}</span>`,
+      stat('🏃', pct(c.moveMul), c.moveMul > 1, 'Скорость бега'),
+      stat('⚔️', pct(c.attackSpeedMul), c.attackSpeedMul > 1, 'Скорость атаки'),
+      c.dodge ? `<span class="up" title="Шанс уклониться">🌀 ${Math.round(c.dodge * 100)}%</span>` : '',
+      c.knockbackResist ? `<span class="up" title="Не сдвинуть">🪨 ${Math.round(c.knockbackResist * 100)}%</span>` : '',
     ].filter(Boolean)
-    btn.innerHTML = `<b>${c.name}</b><span class="stats">${parts.join(' · ')}</span><small>${c.blurb}</small>`
+    btn.innerHTML = `<img src="${PORTRAITS[id]}" alt=""><span class="info"><b>${c.name}</b><span class="stats">${parts.join('')}</span></span>`
     btn.addEventListener('click', () => {
       myChar = id
       savePref('character', id)
@@ -251,13 +305,15 @@ nameInput.value = myName
 const invitedCode = readRoomCode()
 if (invitedCode) {
   $('menu-tagline').textContent = `Тебя позвали в комнату ${invitedCode}. Залетай!`
-  $('btn-main').textContent = 'Войти в матч'
+  $('btn-main').textContent = 'Войти в офис'
 }
 
 async function startGame(code: string | null): Promise<void> {
   myName = nameInput.value.trim().slice(0, 16) || 'Стажёр'
   saveName(myName)
   setPreview(null)
+  camera.clearViewOffset()
+  camTarget.y = 0
   $('menu').hidden = true
   $('hud').hidden = false
   $('btn-attack').hidden = !window.matchMedia('(pointer: coarse)').matches
@@ -293,6 +349,7 @@ async function startGame(code: string | null): Promise<void> {
   match.fx.gore = gore
   // точка появления — по порядку входа; пока никого не видно, считаем себя первым
   match.addLocal(net.selfId, myName, myChar, PLAYER_COLORS[0], 0)
+  match.addDummies() // пока коллеги не пришли — манекены у кулера
   camTarget.set(match.local!.body.x, 0, match.local!.body.z)
   setTimeout(() => {
     if (!net || !match?.local) return
@@ -316,7 +373,7 @@ function backToMenu(error?: string): void {
   history.replaceState(null, '', location.pathname)
   $('hud').hidden = true
   $('menu').hidden = false
-  $('btn-main').textContent = 'Создать матч'
+  $('btn-main').textContent = 'Войти в офис'
   $('menu-tagline').textContent = 'Быстрый PvP на 2–4 коллег. Без регистрации.'
   setPreview(myChar)
   const err = $('menu-error')
@@ -325,7 +382,6 @@ function backToMenu(error?: string): void {
 }
 
 $('btn-main').addEventListener('click', () => void startGame(readRoomCode() ?? makeRoomCode()))
-$('btn-solo').addEventListener('click', () => void startGame(null))
 nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-main').click() })
 
 $('btn-invite').addEventListener('click', async () => {
@@ -391,11 +447,14 @@ function frame(time: number): void {
     if (scoreAcc > 0.5) { scoreAcc = 0; renderScore() }
   } else {
     // в меню камера смотрит на выбранного персонажа
-    camTarget.set(PREVIEW.x - 2.2, 0, PREVIEW.z + 2.2)
-    if (preview) {
-      preview.root.rotation.y += dt * 0.6
-      preview.animate(dt, 0, 0)
-    }
+    camTarget.set(PREVIEW.x + 0.35, 0.95, PREVIEW.z + 0.35)
+    for (const a of lineup.values()) a.animate(dt, 0, FACE_CAMERA)
+    // на широком экране ставим персонажей в центр свободной от меню части
+    const w = window.innerWidth, h = window.innerHeight
+    const card = document.querySelector('#menu .card')
+    const right = w >= 900 && card ? card.getBoundingClientRect().right : 0
+    const shift = right ? (right + w) / 2 - w / 2 : 0
+    camera.setViewOffset(w, h, -shift, 0, w, h)
   }
 
   if (me) sfx.setListener(me.body.x, me.body.z)
@@ -409,7 +468,7 @@ function frame(time: number): void {
   ;($('heal-flash') as HTMLElement).style.opacity = String(healFlash)
 
   // в меню камера ближе — крупный план персонажа
-  camZoom += ((match ? ZOOM : 0.42) - camZoom) * (1 - Math.exp(-4 * dt))
+  camZoom += ((match ? ZOOM : 0.4) - camZoom) * (1 - Math.exp(-4 * dt))
   const far = new URLSearchParams(location.search).has('overview')
   if (far) camTarget.set(0, 0, 0)
   camera.position.copy(camTarget).addScaledVector(camOffset, far ? 2.6 : camZoom)
@@ -422,6 +481,12 @@ function frame(time: number): void {
   }
   camera.lookAt(camTarget)
   gfx.render()
+  if (lineup.size) {
+    renderer.autoClear = false
+    renderer.clearDepth()
+    renderer.render(menuScene, camera)
+    renderer.autoClear = true
+  }
 
   fpsAcc += dt; fpsFrames++
   if (fpsAcc > 0.5) {

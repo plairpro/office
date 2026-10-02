@@ -17,56 +17,120 @@ const HEIGHT = 1.85 // рост в метрах после масштабиро�
 type Group = 'Body' | 'Arm' | 'Leg' | 'Head'
 /** Прямоугольник ячеек атласа 64×64 (включительно) → новый цвет. 'P' = цвет игрока */
 type Rule = [x0: number, y0: number, x1: number, y1: number, color: number | 'P' | 'P+']
-type Look = { base: BaseChar; rules: Partial<Record<Group, Rule[]>>; accessories: (rig: Rig, color: number) => void }
+type Part = 'Body' | 'Arm' | 'Leg'
+/**
+ * Одежда: цвет ячейки атласа по тому, где она на теле.
+ * h — высота от пола (0 — подошвы, 1 — макушка), side — насколько далеко от оси тела (1 — кончики рук).
+ * Цвет игрока на одежду не идёт — он только на аксессуарах (галстук, кепка, бейдж) и на подписи.
+ */
+type Paint = (part: Part, h: number, side: number) => number
+type Look = { base: BaseChar; paint: Paint; head?: Rule[]; accessories: (rig: Rig, color: number) => void }
 
 const SKIN = 0xf5c4a0
-const INK = 0x4d4a7d
+const HIPS = 0.26 // ниже — брюки или юбка
+const SHOES = 0.095 // ниже — обувь
+const HANDS = 0.8 // дальше от оси — кисти
 
 const LOOKS: Record<CharacterId, Look> = {
-  // Курьер ← рыцарь: поло цвета игрока, джинсы, кеды, кепка, коробка пиццы
+  // Курьер ← рыцарь: куртка доставки, джинсы, белые кроссовки, кепка цвета игрока, коробка пиццы
   courier: {
     base: 'knight',
-    rules: {
-      Body: [[6, 0, 9, 3, 'P'], [14, 0, 15, 2, 'P+'], [12, 0, 13, 3, 0x6a5a86], [0, 4, 3, 7, 0xffffff],
-        [4, 4, 5, 6, 'P'], [14, 5, 15, 7, 0x6a5a86]],
-      Arm: [[6, 0, 9, 3, 'P'], [14, 0, 15, 2, 'P+'], [12, 0, 13, 3, SKIN]],
-      Leg: [[6, 0, 9, 3, 0x8aa6dc], [14, 0, 15, 2, 0xa3bce6], [12, 0, 13, 3, 0x8aa6dc], [14, 5, 15, 7, 0xf7f7fb]],
-    },
-    accessories: (rig, color) => { cap(rig, color); pizza(rig) },
+    paint: (p, h, side) =>
+      p === 'Arm' ? (side > HANDS ? SKIN : 0xf2b13f)
+        : p === 'Leg' ? (h < SHOES ? 0xf4f3f7 : 0x5f7fae)
+          : h < HIPS ? 0x5f7fae : 0xf2b13f,
+    accessories: (rig, color) => { cap(rig, color); pizza(rig); badge(rig, color) },
   },
-  // Босс ← варвар: белая рубашка, подтяжки цвета игрока, тёмные брюки, лысина и седая борода
+  // Босс ← варвар: белая рубашка, бежевые брюки, коричневые ботинки, галстук цвета игрока
   boss: {
     base: 'barbarian',
-    rules: {
-      Body: [[0, 4, 3, 7, 0xfbfaf6], [4, 4, 5, 7, 0xf1f0ec], [12, 0, 13, 3, 'P'], [14, 0, 15, 3, 0x5a5888],
-        [6, 0, 7, 3, 0xe0bf6a], [14, 5, 15, 6, 0x5a5888]],
-      Arm: [[0, 4, 3, 7, 0xfbfaf6], [4, 4, 5, 7, 0xf1f0ec], [12, 0, 13, 3, 0xfbfaf6], [14, 9, 15, 11, 0xfbfaf6]],
-      Leg: [[6, 8, 7, 11, 0x5a5888], [4, 4, 5, 7, INK], [14, 5, 15, 6, INK]],
-    },
+    paint: (p, h, side) =>
+      p === 'Arm' ? (side > HANDS ? SKIN : 0xfbfaf6)
+        : p === 'Leg' ? (h < SHOES ? 0x7a4d30 : 0xd8c3a0)
+          : h < HIPS ? 0xd8c3a0 : 0xfbfaf6,
     accessories: (rig, color) => tie(rig, color),
   },
-  // Бухгалтерша ← маг: седое каре, кардиган цвета игрока, блузка, юбка, огромные очки
+  // Бухгалтерша ← маг: седое каре, серо-сиреневый кардиган, коричневая юбка, телесные колготки, огромные очки
   accountant: {
     base: 'mage',
-    rules: {
-      Body: [[0, 4, 1, 6, 'P'], [6, 0, 9, 3, 0xfaf3ea], [10, 0, 11, 3, 0x7a5c6e], [4, 8, 4, 11, 0x9a94bd],
-        [14, 4, 15, 7, 0x77729a]],
-      Arm: [[0, 4, 1, 6, 'P'], [6, 0, 9, 3, 0xfaf3ea]],
-      Leg: [[6, 8, 7, 11, 0x5a4250], [14, 4, 15, 7, 0x77729a]],
-      Head: [[2, 0, 3, 2, 0xdcdae6], [2, 5, 3, 6, 'P']],
-    },
-    accessories: (rig) => glasses(rig),
+    paint: (p, h, side) =>
+      p === 'Arm' ? (side > HANDS ? SKIN : 0x9c93b8)
+        : p === 'Leg' ? (h < SHOES ? 0x4b3e48 : h > 0.17 ? 0x6e5257 : 0xe2c2a8)
+          : h < HIPS ? 0x6e5257 : 0x9c93b8,
+    head: [[2, 0, 3, 2, 0xdcdae6]],
+    accessories: (rig, color) => { glasses(rig); badge(rig, color) },
   },
-  // Секретарша ← разбойница: платье цвета игрока, тонкий пояс, каблуки
+  // Секретарша ← разбойница: белая блузка, тёмная юбка-карандаш, колготки, чёрные туфли
   secretary: {
     base: 'rogue',
-    rules: {
-      Body: [[0, 4, 3, 7, 'P'], [10, 0, 11, 2, INK], [12, 0, 13, 3, INK], [6, 0, 7, 2, 0xe8c56a], [14, 6, 15, 7, 'P']],
-      Arm: [[0, 4, 3, 7, 'P'], [10, 0, 11, 2, SKIN], [10, 9, 11, 11, SKIN]],
-      Leg: [[14, 6, 15, 7, SKIN], [6, 8, 7, 10, 0xe9877a]],
-    },
-    accessories: () => {},
+    paint: (p, h, side) =>
+      p === 'Arm' ? (side > HANDS ? SKIN : 0xfdfaf4)
+        : p === 'Leg' ? (h < SHOES ? 0x2f2d3d : h > 0.17 ? 0x3e3b60 : 0xeec6aa)
+          : h < HIPS ? 0x3e3b60 : 0xfdfaf4,
+    accessories: (rig, color) => badge(rig, color),
   },
+}
+
+/** Похоже на кожу (лицо, руки) — такие ячейки не перекрашиваем */
+function isSkin(r: number, g: number, b: number): boolean {
+  return r > 200 && g > 160 && b > 140 && r >= g && g >= b && r - b > 25
+}
+
+/** Для каждой ячейки атласа: средняя высота и удалённость от оси у вершин этой части тела */
+const statsCache = new Map<string, Map<string, { h: number; side: number }>>()
+function cellStats(base: BaseChar, model: THREE.Object3D, part: Part): Map<string, { h: number; side: number }> {
+  const key = `${base}:${part}`
+  const hit = statsCache.get(key)
+  if (hit) return hit
+  model.updateMatrixWorld(true)
+  const box = new THREE.Box3().setFromObject(model)
+  const H = box.max.y - box.min.y
+  const acc = new Map<string, { h: number; side: number; n: number }>()
+  const meshes: THREE.SkinnedMesh[] = []
+  model.traverse((o) => { if (o instanceof THREE.SkinnedMesh && groupOf(o.name) === part) meshes.push(o) })
+  const v = new THREE.Vector3()
+  let maxSide = 1e-3
+  const pts: [string, number, number][] = []
+  for (const m of meshes) {
+    const uv = m.geometry.attributes.uv
+    const n = m.geometry.attributes.position.count
+    for (let i = 0; i < n; i++) {
+      m.getVertexPosition(i, v)
+      v.applyMatrix4(m.matrixWorld)
+      const cx = Math.floor(uv.getX(i) * 16), cy = Math.floor(uv.getY(i) * 16)
+      const side = Math.abs(v.x)
+      maxSide = Math.max(maxSide, side)
+      pts.push([`${cx},${cy}`, (v.y - box.min.y) / H, side])
+    }
+  }
+  for (const [k, h, side] of pts) {
+    const a = acc.get(k) ?? { h: 0, side: 0, n: 0 }
+    a.h += h; a.side += side / maxSide; a.n++
+    acc.set(k, a)
+  }
+  const out = new Map<string, { h: number; side: number }>()
+  for (const [k, a] of acc) out.set(k, { h: a.h / a.n, side: a.side / a.n })
+  statsCache.set(key, out)
+  return out
+}
+
+/** Правила перекраски одежды для части тела */
+function outfitRules(look: Look, model: THREE.Object3D, part: Part, src: THREE.Texture): Rule[] {
+  const img = src.image as CanvasImageSource & { width: number; height: number }
+  const c = document.createElement('canvas')
+  c.width = c.height = 16
+  const g = c.getContext('2d')!
+  g.drawImage(img, 0, 0, 16, 16) // по пикселю на ячейку — средний цвет
+  const px = g.getImageData(0, 0, 16, 16).data
+  const rules: Rule[] = []
+  for (const [k, st] of cellStats(look.base, model, part)) {
+    const [x, y] = k.split(',').map(Number)
+    if (x < 0 || y < 0 || x > 15 || y > 15) continue
+    const i = (y * 16 + x) * 4
+    if (isSkin(px[i], px[i + 1], px[i + 2])) continue
+    rules.push([x, y, x, y, look.paint(part, st.h, st.side)])
+  }
+  return rules
 }
 
 // ---------- перекраска атласа ----------
@@ -207,6 +271,28 @@ function tie(rig: Rig, color: number): void {
   rig.attach('chest', g, new THREE.Vector3(0, b.max.y - h * 0.3, b.max.z + 0.01))
 }
 
+/** Офисный бейдж на шнурке цвета игрока — чтобы в драке отличать своих от чужих */
+function badge(rig: Rig, color: number): void {
+  const b = rig.box('Body')
+  const h = (b.max.y - b.min.y) * 0.5
+  const g = new THREE.Group()
+  const m = mat(color, rig)
+  const card = new THREE.Mesh(geo(new THREE.BoxGeometry(h * 0.32, h * 0.42, h * 0.03), rig), m)
+  card.position.y = -h * 0.45
+  const photo = new THREE.Mesh(geo(new THREE.BoxGeometry(h * 0.14, h * 0.16, h * 0.01), rig), mat(0xfbf7f1, rig))
+  photo.position.set(0, -h * 0.39, h * 0.02)
+  photo.userData.keep = true
+  for (const sx of [-1, 1]) {
+    const cord = new THREE.Mesh(geo(new THREE.BoxGeometry(h * 0.03, h * 0.5, h * 0.02), rig), m)
+    cord.position.set(sx * h * 0.12, -h * 0.05, -h * 0.01)
+    cord.rotation.z = sx * 0.35
+    g.add(cord)
+  }
+  g.add(card, photo)
+  g.name = 'badge'
+  rig.attach('chest', g, new THREE.Vector3(0, b.max.y - h * 0.2, b.max.z + 0.015))
+}
+
 // ---------- аватар ----------
 
 /** Какие клипы играть. Названия — из пака KayKit */
@@ -264,8 +350,8 @@ export class Avatar {
         const nm = src.clone()
         nm.roughness = 0.8
         nm.metalness = 0
-        const rules = look.rules[grp]
-        if (rules && src.map) {
+        const rules = !src.map ? null : grp === 'Head' ? look.head ?? null : outfitRules(look, this.model, grp, src.map)
+        if (rules && rules.length && src.map) {
           nm.map = recolor(src.map, rules, color)
           this.disposables.push(nm.map)
         }
@@ -369,6 +455,9 @@ export class Avatar {
     this.hpFg = bar(0xd3122a, 0.95)
     this.hpBg.visible = this.hpFg.visible = false
   }
+
+  /** Подпись с именем над головой (в меню прячем) */
+  showLabel(v: boolean): void { this.label.visible = v }
 
   /** Здоровье 0..1 над головой; null — скрыть */
   setHp(frac: number | null): void {
@@ -482,30 +571,10 @@ export class Avatar {
   setColor(hex: number): void {
     if (hex === this.color) return
     this.color = hex
-    const look = LOOKS[this.character]
-    const base = getAssets().chars[look.base].scene
-    const srcMap = new Map<Group, THREE.Texture>()
-    base.traverse((o) => {
-      if (o instanceof THREE.Mesh && (o.material as THREE.MeshStandardMaterial).map) {
-        srcMap.set(groupOf(o.name), (o.material as THREE.MeshStandardMaterial).map!)
-      }
-    })
-    const done = new Set<THREE.Material>()
+    // одежда от цвета игрока не зависит — перекрашиваем только аксессуары
     this.model.traverse((o) => {
-      if (!(o instanceof THREE.Mesh)) return
-      const m = o.material as THREE.MeshStandardMaterial
-      if (done.has(m)) return
-      done.add(m)
-      const grp = groupOf(o.name)
-      const rules = look.rules[grp]
-      const src = srcMap.get(grp)
-      if (rules && src && o instanceof THREE.SkinnedMesh) {
-        m.map?.dispose()
-        m.map = recolor(src, rules, hex)
-        this.disposables.push(m.map)
-        m.needsUpdate = true
-      } else if (!(o instanceof THREE.SkinnedMesh) && /cap|tie/.test(o.parent?.name ?? '')) {
-        m.color.setHex(hex)
+      if (!(o instanceof THREE.SkinnedMesh) && o instanceof THREE.Mesh && /cap|tie|badge/.test(o.parent?.name ?? '') && !o.userData.keep) {
+        (o.material as THREE.MeshStandardMaterial).color.setHex(hex)
       }
     })
   }

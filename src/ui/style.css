@@ -196,6 +196,7 @@ html, body {
 .char {
   font: inherit;
   text-align: left;
+  align-items: center;
   color: var(--text);
   background: var(--field);
   border: 1px solid var(--line);
@@ -288,3 +289,32 @@ html, body {
   .fps { top: calc(max(12px, env(safe-area-inset-top)) + 54px); bottom: auto; right: 12px; }
   #feed { top: calc(max(12px, env(safe-area-inset-top)) + 100px); }
 }
+
+/* Карточка персонажа: портрет + имя + характеристики значками */
+.char { flex-direction: row !important; gap: 8px !important; padding: 6px 8px 6px 6px !important; transition: transform 0.12s ease, box-shadow 0.12s ease; }
+.char:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(61, 53, 87, 0.12); }
+.char img { width: 54px; height: 54px; border-radius: 12px; background: linear-gradient(160deg, #fbe8e3, #e3e9f7); flex: none; }
+.char .info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.char .stats { display: flex; flex-wrap: wrap; gap: 2px 8px; font-size: 12px; }
+.char .stats span { white-space: nowrap; }
+
+/* Главная кнопка: яркая, дышит, на наведение — подъём и блик */
+.btn.cta {
+  position: relative; overflow: hidden;
+  font-size: 18px; font-weight: 800; letter-spacing: 0.5px; padding: 15px 16px;
+  color: #fff; border: 0;
+  background: linear-gradient(135deg, #ff5a6e 0%, #e5132e 55%, #c80f2a 100%);
+  box-shadow: 0 5px 0 #8e0b1f, 0 10px 28px rgba(229, 19, 46, 0.35);
+  animation: cta-breathe 2.4s ease-in-out infinite;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+}
+.btn.cta::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: -60%; width: 40%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  transform: skewX(-20deg); transition: left 0.5s ease;
+}
+.btn.cta:hover { transform: translateY(-2px) scale(1.02); filter: brightness(1.08); box-shadow: 0 7px 0 #8e0b1f, 0 16px 36px rgba(229, 19, 46, 0.45); animation-play-state: paused; }
+.btn.cta:hover::after { left: 120%; }
+.btn.cta:active { transform: translateY(3px); box-shadow: 0 2px 0 #8e0b1f, 0 6px 16px rgba(229, 19, 46, 0.3); }
+.btn.cta:disabled { animation: none; filter: saturate(0.6); }
+@keyframes cta-breathe { 50% { box-shadow: 0 5px 0 #8e0b1f, 0 12px 34px rgba(229, 19, 46, 0.55); } }

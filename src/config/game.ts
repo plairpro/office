@@ -47,8 +47,8 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     hp: 80, moveMul: 1.03, attackSpeedMul: 1.15, dodge: 0.15, radius: 0.38, knockbackResist: 0,
   },
   boss: {
-    id: 'boss', name: 'Босс', blurb: 'Медленный, но его не сдвинуть.',
-    hp: 150, moveMul: 0.92, attackSpeedMul: 0.95, dodge: 0, radius: 0.52, knockbackResist: 0.7,
+    id: 'boss', name: 'Босс', blurb: 'Самый живучий и почти не отлетает от ударов, но медленный.',
+    hp: 120, moveMul: 0.92, attackSpeedMul: 0.95, dodge: 0, radius: 0.52, knockbackResist: 0.7,
   },
   secretary: {
     id: 'secretary', name: 'Секретарша', blurb: 'Печатает 300 знаков в минуту. И бьёт так же.',
