@@ -9,7 +9,13 @@ export interface AABB {
   z: number
   hw: number
   hd: number
+  /** высота верха препятствия: выше SHOT_HEIGHT — блокирует выстрелы, ниже — только движение */
+  top: number
 }
+
+/** Выстрелы летят на высоте груди: всё, что ниже, — укрытие только от тарана, не от пуль */
+export const SHOT_HEIGHT = 1.0
+export const blocksShots = (c: AABB): boolean => c.top >= SHOT_HEIGHT
 
 /** Тип поверхности: от него зависят текстура, шероховатость, металличность */
 export type Kind =
@@ -83,13 +89,13 @@ export class StaticBuilder {
     const r = Math.min(0.045, Math.min(w, h, d) * 0.3)
     const g = r > 0.006 ? new RoundedBoxGeometry(w, h, d, 2, r) : new THREE.BoxGeometry(w, h, d)
     this.add(g, x, y + h / 2, z, kind, hex, o)
-    if (o.collide) this.collideBox(w, d, x, z, o.rotY ?? 0)
+    if (o.collide) this.collideBox(w, d, x, z, o.rotY ?? 0, y + h)
   }
 
   /** Коробка со скруглёнными рёбрами — диваны, подушки, техника */
   rbox(w: number, h: number, d: number, r: number, x: number, y: number, z: number, kind: Kind, hex = 0xffffff, o: Opts = {}): void {
     this.add(new RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2, h / 2, d / 2)), x, y + h / 2, z, kind, hex, o)
-    if (o.collide) this.collideBox(w, d, x, z, o.rotY ?? 0)
+    if (o.collide) this.collideBox(w, d, x, z, o.rotY ?? 0, y + h)
   }
 
   cylinder(rTop: number, rBottom: number, h: number, x: number, y: number, z: number, kind: Kind, hex = 0xffffff,
@@ -97,7 +103,7 @@ export class StaticBuilder {
     this.add(new THREE.CylinderGeometry(rTop, rBottom, h, o.segments ?? 20), x, y + h / 2, z, kind, hex, o)
     if (o.collide) {
       const r = Math.max(rTop, rBottom)
-      this.colliders.push({ x, z, hw: r, hd: r })
+      this.colliders.push({ x, z, hw: r, hd: r, top: y + h })
     }
   }
 
@@ -112,14 +118,14 @@ export class StaticBuilder {
     this.add(g, x, y, z, kind, hex, o)
   }
 
-  /** Только препятствие, без геометрии */
-  blocker(x: number, z: number, w: number, d: number): void {
-    this.colliders.push({ x, z, hw: w / 2, hd: d / 2 })
+  /** Только препятствие, без геометрии. top — высота (по умолчанию стена, блокирует выстрелы) */
+  blocker(x: number, z: number, w: number, d: number, top = 3): void {
+    this.colliders.push({ x, z, hw: w / 2, hd: d / 2, top })
   }
 
-  private collideBox(w: number, d: number, x: number, z: number, r: number): void {
+  private collideBox(w: number, d: number, x: number, z: number, r: number, top: number): void {
     const c = Math.abs(Math.cos(r)), s = Math.abs(Math.sin(r))
-    this.colliders.push({ x, z, hw: (w * c + d * s) / 2, hd: (w * s + d * c) / 2 })
+    this.colliders.push({ x, z, hw: (w * c + d * s) / 2, hd: (w * s + d * c) / 2, top })
   }
 
   private add(g0: THREE.BufferGeometry, x: number, y: number, z: number, kind: Kind, hex: number, o: Opts): void {
