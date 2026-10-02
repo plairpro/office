@@ -497,23 +497,24 @@ function desk(b: StaticBuilder, p: Placer, x: number, z: number, rot: number): v
       p.put('furniture', 'chair_C', cx, cz, face + Math.PI + (rand() - 0.5) * 0.5, { collide: false })
     }
   }
+  // всё на столешнице держим внутри её границ (стол ±1.08 × ±0.72 м): между мониторами — лампа или кактус,
+  // у торцов — книги и телефон
   if (rand() < 0.6) {
-    const [lx, lz] = at(1.25, (rand() - 0.5) * 0.6)
-    p.put('furniture', 'lamp_table', lx, lz, rand() * 6, { y: top, scale: 0.6, collide: false })
-  }
-  if (rand() < 0.6) {
-    const [bx, bz] = at(-1.2, (rand() - 0.5) * 0.4)
-    p.put('furniture', 'book_set', bx, bz, rot + rand(), { y: top + 0.18 * 0.72, scale: 0.8, collide: false })
-  }
-  // стакан с ручками и телефон
-  pens(b, ...at(-0.95, 0.25), top)
-  if (rand() < 0.7) deskPhone(b, ...at(0.95, -0.3), top, rot)
-  // мусорка у торца
-  bin(b, ...at(1.6, 0.45 * (rand() < 0.5 ? -1 : 1)))
-  if (rand() < 0.5) {
-    const [cx, cz] = at(0, (rand() - 0.5) * 0.3)
+    const [lx, lz] = at(0, 0)
+    p.put('furniture', 'lamp_table', lx, lz, rand() * 6, { y: top, scale: 0.42, collide: false })
+  } else {
+    const [cx, cz] = at(0, 0)
     p.put('furniture', rand() < 0.5 ? 'cactus_small_A' : 'cactus_small_B', cx, cz, rand() * 6, { y: top, collide: false })
   }
+  if (rand() < 0.6) {
+    const [bx, bz] = at(-0.93, 0)
+    p.put('furniture', 'book_set', bx, bz, rot + Math.PI / 2, { y: top + 0.18 * 0.72 * 0.7, scale: 0.7, collide: false })
+  }
+  // стакан с ручками и телефон
+  pens(b, ...at(0, -0.5), top)
+  if (rand() < 0.7) deskPhone(b, ...at(0.92, 0.3), top, rot)
+  // мусорка у торца
+  bin(b, ...at(1.6, 0.45 * (rand() < 0.5 ? -1 : 1)))
 }
 
 function lowWall(b: StaticBuilder, axis: 'x' | 'z', at: number, a: number, c: number, gaps: [number, number][]): void {
@@ -736,10 +737,10 @@ function details(b: StaticBuilder): void {
   whiteboard(b, 7.2, 2.0, wallN, 0, 1.8)
   frame(b, -1.44 - 0.75, 1.75, wallN, 0, 0.55, 0.7, MV.coral, MV.teal)
   frame(b, -1.44 + 0.75, 1.75, wallN, 0, 0.55, 0.7, MV.teal, MV.mustard)
-  frame(b, -10.08, 1.9, wallN, 0, 1.0, 0.6, MV.mustard, MV.lavender) // в переговорке
+  frame(b, -12.3, 1.9, wallN, 0, 1.0, 0.6, MV.mustard, MV.lavender) // в переговорке, подальше от стеклянной стены
   // запад: доска у рабочего места «Запад», часы, картина
   whiteboard(b, wallW, 1.95, 2.88, Math.PI / 2, 1.4)
-  wallClock(b, wallW, 2.2, -8.64, Math.PI / 2)
+  wallClock(b, wallW, 2.2, -7.2, Math.PI / 2) // не в стеклянной стене переговорки (z −8.6)
   frame(b, wallW, 1.8, 0, Math.PI / 2, 0.6, 0.8, MV.lavender, MV.coral)
   // принтер и шкафы у стены
   printer(b, 8.7, -12.3, 0)
