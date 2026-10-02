@@ -17,7 +17,7 @@ export interface Assets {
   packs: Record<PackName, Map<string, THREE.Object3D>>
   /** офисные персонажи (Quaternius) */
   chars: Record<CharacterId, GLTF>
-  /** анимации для каждого персонажа: у мужчин — из файла босса, у женщин — бухгалтерши (скелет общий) */
+  /** анимации (скелет у всех общий, клипы хранятся в файле босса) */
   clips: Record<CharacterId, Map<string, THREE.AnimationClip>>
 }
 
@@ -53,12 +53,11 @@ export async function loadAssets(onProgress: (p: number) => void): Promise<Asset
     return map
   }
 
-  const men = new Map(boss.animations.map((c) => [c.name, c]))
-  const women = new Map(accountant.animations.map((c) => [c.name, c]))
+  const clips = new Map(boss.animations.map((c) => [c.name, c]))
   assets = {
     packs: { furniture: pack(furniture), kitchen: pack(kitchen), proto: pack(proto) },
     chars: { boss, courier, accountant, secretary },
-    clips: { boss: men, courier: men, accountant: women, secretary: women },
+    clips: { boss: clips, courier: clips, accountant: clips, secretary: clips },
   }
   return assets
 }

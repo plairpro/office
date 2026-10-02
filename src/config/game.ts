@@ -43,7 +43,7 @@ export interface CharacterDef {
 
 export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   accountant: {
-    id: 'accountant', name: 'Бухгалтерша', blurb: 'Хрупкая, но вёрткая. Видела всё.',
+    id: 'accountant', name: 'Бухгалтер', blurb: 'Хрупкий, но вёрткий. Видел всё.',
     hp: 80, moveMul: 1.03, attackSpeedMul: 1.3, dodge: 0.15, radius: 0.38, knockbackResist: 0,
   },
   boss: {
@@ -51,7 +51,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     hp: 120, moveMul: 0.92, attackSpeedMul: 0.8, dodge: 0, radius: 0.52, knockbackResist: 0.7,
   },
   secretary: {
-    id: 'secretary', name: 'Секретарша', blurb: 'Печатает 300 знаков в минуту. И бьёт так же.',
+    id: 'secretary', name: 'Секретарь', blurb: 'Печатает 300 знаков в минуту. И бьёт так же.',
     hp: 90, moveMul: 1.04, attackSpeedMul: 1.5, dodge: 0, radius: 0.38, knockbackResist: 0,
   },
   courier: {
@@ -114,34 +114,34 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     id: 'cutter', name: 'Резак', type: 'melee',
     range: 1.0, damage: 22, cooldown: 0.4, windup: 0.08, arc: 80, backstabMultiplier: 2,
     effects: [{ kind: 'bleed', seconds: 10, dps: 2 }],
-    clip: 'Punch_Right', animSpeed: 2.2,
+    clip: 'SwordSlash', animSpeed: 2.6,
   },
   // дальний бой 10 м: очередь скоб, средний урон, кровотечение 5 с, магазин 12
   stapler: {
     id: 'stapler', name: 'Степлер', type: 'ranged',
     range: 10, damage: 12, cooldown: 0.24, windup: 0, spread: 5, speed: 24, ammo: 12,
     effects: [{ kind: 'bleed', seconds: 5, dps: 1.5 }],
-    clip: 'Gun_Shoot', animSpeed: 2.4,
+    clip: 'Shoot_OneHanded', animSpeed: 2.2,
   },
   // ближний бой 2 м: слабый урон, широкий размах, замедляет на 5 с и отталкивает
   mop: {
     id: 'mop', name: 'Швабра', type: 'melee',
     range: 2.0, damage: 14, cooldown: 0.75, windup: 0.18, arc: 150,
     effects: [{ kind: 'slow', seconds: 5, factor: 0.55 }, { kind: 'knockback', force: 9 }],
-    clip: 'Sword_Slash', animSpeed: 1.5,
+    clip: 'SwordSlash', animSpeed: 1.5,
   },
   // вплотную (1 м): сильный удар с заметным замахом, оглушает на 2 с
   lamp: {
     id: 'lamp', name: 'Настольная лампа', type: 'melee',
     range: 1.0, damage: 5, cooldown: 1.2, windup: 0.42, arc: 100,
     effects: [{ kind: 'stun', seconds: 2 }],
-    clip: 'Sword_Slash', animSpeed: 0.95,
+    clip: 'SwordSlash', animSpeed: 0.95,
   },
   // 5 м: веер купюр почти без урона — главное, выбивает оружие из рук на 2 с
   moneygun: {
     id: 'moneygun', name: 'Деньгомёт', type: 'ranged',
     range: 5, damage: 2, cooldown: 0.9, windup: 0, pellets: 7, spread: 32, speed: 15, ammo: 6,
     effects: [{ kind: 'disarm', seconds: 2 }],
-    clip: 'Gun_Shoot', animSpeed: 1.0,
+    clip: 'Shoot_OneHanded', animSpeed: 0.9,
   },
 }

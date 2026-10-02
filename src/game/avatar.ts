@@ -7,38 +7,39 @@ import { weaponMesh } from './weapons3d'
 import type { WeaponId } from '../config/game'
 
 // ======================================================================
-// Офисные персонажи — CC0-модели Quaternius «Ultimate Modular Men / Women»:
-// настоящая офисная одежда (костюмы, худи, платье), у каждой вещи свой материал —
+// Офисные персонажи — CC0-модели Quaternius «Ultimate Animated Character Pack» (мультяшные, с большой головой):
+// настоящая офисная одежда, у каждой вещи свой материал —
 // перекрашиваем материалы в пастельную палитру. Цвет игрока — только на аксессуарах.
 // ======================================================================
 
 const HEIGHT = 1.85 // рост в метрах после масштабирования
 const SKIN = 0xf2c39b
+const EYES = 0x2f2d3d
 
 /** 'P' — цвет игрока */
 type Paint = Record<string, number | 'P'>
 type Look = { paint: Paint; accessories: (rig: Rig, color: number) => void }
 
 const LOOKS: Record<CharacterId, Look> = {
-  // Курьер: оранжевая худи доставки, джинсовые шорты, кепка цвета игрока, коробка пиццы
+  // Курьер: оранжевая футболка доставки, джинсы, кепка цвета игрока
   courier: {
-    paint: { Purple: 0xf2a03f, LightBlue: 0x5f7fae, White: 0xf4f3f7, Hair: 0x5a3a22, Skin: SKIN },
-    accessories: (rig, color) => { cap(rig, color); pizza(rig); badge(rig, color) },
+    paint: { Shirt: 0xf2a03f, Pants: 0x5f7fae, Belt: 0x4b392d, Hair: 0x5a3a22, Skin: SKIN, Face: EYES },
+    accessories: (rig, color) => { cap(rig, color); badge(rig, color) },
   },
-  // Босс: бежевый костюм, белая рубашка, галстук цвета игрока, коричневые ботинки, седина
+  // Босс: бежевый костюм, белая рубашка, галстук цвета игрока, седина
   boss: {
-    paint: { Suit: 0xcdb48e, White: 0xfbfaf6, Tie: 'P', Black: 0x6b4430, DarkBrown: 0x6b4430, Grey: 0x8a8a8a, Hair: 0xb9b4ad, Eyebrows: 0x8f8a84, Skin: SKIN },
+    paint: { Black: 0xcdb48e, Shirt: 0xfbfaf6, Details: 'P', Belt: 0x6b4430, Hair: 0xc9c4bd, Skin: SKIN, Face: EYES },
     accessories: () => {},
   },
-  // Бухгалтерша: сиреневый брючный костюм, белая блузка, седое каре, огромные очки
+  // Бухгалтер: сиреневая блузка, подтяжки, коричневые брюки, седые волосы
   accountant: {
-    paint: { Black: 0x8d82b4, White: 0xfbfaf6, Hair_Brown: 0xdcdae6, Hair_Blond: 0xdcdae6, Brown: 0x4b3e48, Skin: SKIN },
-    accessories: (rig, color) => { glasses(rig); badge(rig, color) },
-  },
-  // Секретарша: тёмно-синее платье, каштановые волосы
-  secretary: {
-    paint: { LimeGreen: 0x3e3b70, Red: 0x7a4a2c, Gold: 0xf0c26c, Brown: 0x2f2d3d, Skin: SKIN },
+    paint: { Shirt: 0xb3a8d6, Pants: 0x6e5257, Detail: 0x8d82b4, Belt: 0x4b3e48, Hair: 0xe4e2ec, Skin: SKIN, Face: EYES },
     accessories: (rig, color) => badge(rig, color),
+  },
+  // Секретарь: тёмно-синий костюм, белая блузка, галстук цвета игрока, каштановые волосы
+  secretary: {
+    paint: { Black: 0x3e3b70, Shirt: 0xfbfaf6, Details: 'P', Belt: 0x2f2d3d, Hair: 0x7a4a2c, Skin: SKIN, Face: EYES },
+    accessories: () => {},
   },
 }
 
@@ -46,9 +47,9 @@ const LOOKS: Record<CharacterId, Look> = {
 const CLIP = { idle: 'Idle', run: 'Run', walk: 'Walk' }
 /** Старые названия анимаций (из пака KayKit) → новые */
 const LEGACY: Record<string, string> = {
-  Hit_A: 'HitRecieve', Hit_B: 'HitRecieve', Dodge_Forward: 'Roll', Death_A: 'Death', Cheer: 'Punch_Right',
-  Unarmed_Melee_Attack_Punch_A: 'Punch_Right', '1H_Melee_Attack_Stab': 'Punch_Right', '1H_Ranged_Shoot': 'Gun_Shoot',
-  '2H_Melee_Attack_Slice': 'Sword_Slash', '2H_Melee_Attack_Chop': 'Sword_Slash', '1H_Melee_Attack_Chop': 'Sword_Slash',
+  Hit_A: 'RecieveHit', Hit_B: 'RecieveHit', Dodge_Forward: 'Roll', Death_A: 'Death', Cheer: 'SwordSlash',
+  Unarmed_Melee_Attack_Punch_A: 'SwordSlash', '1H_Melee_Attack_Stab': 'SwordSlash', '1H_Ranged_Shoot': 'Shoot_OneHanded',
+  '2H_Melee_Attack_Slice': 'SwordSlash', '2H_Melee_Attack_Chop': 'SwordSlash', '1H_Melee_Attack_Chop': 'SwordSlash',
 }
 
 function lighten(hex: number, k: number): number {
@@ -74,24 +75,6 @@ const mat = (hex: number, rig: Rig) => {
 }
 const geo = <G extends THREE.BufferGeometry>(g: G, rig: Rig): G => { rig.disposables.push(g); return g }
 
-function glasses(rig: Rig): void {
-  const b = rig.box('Head')
-  const w = b.max.x - b.min.x
-  const frame = mat(0x3d3557, rig)
-  const lens = new THREE.MeshStandardMaterial({ color: 0xdff2ff, transparent: true, opacity: 0.35, roughness: 0.1 })
-  rig.disposables.push(lens)
-  const g = new THREE.Group()
-  const r = w * 0.15
-  const ring = geo(new THREE.TorusGeometry(r, r * 0.16, 8, 24), rig)
-  const disc = geo(new THREE.CircleGeometry(r, 24), rig)
-  for (const sx of [-1, 1]) {
-    const o = new THREE.Mesh(ring, frame); o.position.x = sx * r * 1.15; g.add(o)
-    const l = new THREE.Mesh(disc, lens); l.position.x = sx * r * 1.15; g.add(l)
-  }
-  const bridge = new THREE.Mesh(geo(new THREE.BoxGeometry(r * 0.5, r * 0.15, r * 0.15), rig), frame)
-  g.add(bridge)
-  rig.attach('Head', g, new THREE.Vector3(0, b.min.y + (b.max.y - b.min.y) * 0.56, b.max.z + r * 0.15))
-}
 
 function cap(rig: Rig, color: number): void {
   const b = rig.box('Head')
@@ -111,17 +94,6 @@ function cap(rig: Rig, color: number): void {
   rig.attach('Head', g, new THREE.Vector3(0, b.min.y + (b.max.y - b.min.y) * 0.8, (b.min.z + b.max.z) / 2))
 }
 
-function pizza(rig: Rig): void {
-  const box = new THREE.Group()
-  const hb = rig.box('Head')
-  const s = (hb.max.x - hb.min.x) * 1.5
-  const lid = new THREE.Mesh(geo(new THREE.BoxGeometry(s, s * 0.14, s), rig), mat(0xf2d29b, rig))
-  const logo = new THREE.Mesh(geo(new THREE.CylinderGeometry(s * 0.2, s * 0.2, 0.01, 20), rig), mat(0xe8505b, rig))
-  logo.position.y = s * 0.075
-  box.add(lid, logo)
-  const w = rig.bone('Wrist.L')
-  rig.attach('Wrist.L', box, new THREE.Vector3(w.x - s * 0.15, w.y + s * 0.1, w.z + s * 0.3))
-}
 
 /** Офисный бейдж на шнурке цвета игрока — чтобы в драке отличать своих от чужих */
 function badge(rig: Rig, color: number): void {
@@ -144,7 +116,8 @@ function badge(rig: Rig, color: number): void {
   g.add(card, photo)
   g.name = 'badge'
   const neck = rig.bone('Neck')
-  rig.attach('Chest', g, new THREE.Vector3(neck.x, neck.y - h * 0.15, hb.max.z - h * 0.12))
+  const torso = rig.box('Torso')
+  rig.attach('Torso', g, new THREE.Vector3(neck.x, neck.y - h * 0.1, torso.max.z + h * 0.02))
 }
 
 // ---------- аватар ----------
@@ -225,6 +198,22 @@ export class Avatar {
           o.computeBoundingBox() // по скиннутым вершинам в текущей позе
           box.union(o.boundingBox!.clone().applyMatrix4(o.matrixWorld))
         })
+        if (!box.isEmpty()) return box
+        // одна сетка на всё тело — берём вершины, которые двигает одноимённая кость (голова и всё, что на ней)
+        const v = new THREE.Vector3()
+        model.traverse((o) => {
+          if (!(o instanceof THREE.SkinnedMesh)) return
+          const bi = o.skeleton.bones.findIndex((b) => b.name === part)
+          if (bi < 0) return
+          const si = o.geometry.attributes.skinIndex, sw = o.geometry.attributes.skinWeight
+          for (let i = 0; i < si.count; i++) {
+            let w = 0
+            for (let k = 0; k < 4; k++) if (si.getComponent(i, k) === bi) w += sw.getComponent(i, k)
+            if (w < 0.5) continue
+            o.getVertexPosition(i, v)
+            box.expandByPoint(v.applyMatrix4(o.matrixWorld))
+          }
+        })
         return box.isEmpty() ? new THREE.Box3(new THREE.Vector3(-0.1, 1.5, -0.1), new THREE.Vector3(0.1, 1.8, 0.2)) : box
       },
       bone: (boneName) => {
@@ -246,8 +235,8 @@ export class Avatar {
     }
     look.accessories(rig, color)
     // гнездо для оружия: в кулаке правой руки, оси — как у модели в стойке (вперёд = +Z)
-    const grip = rig.bone('Wrist.R').lerp(rig.bone('Middle1.R'), 0.8)
-    rig.attach('Wrist.R', this.socket, grip)
+    const grip = rig.bone('Fist.R')
+    rig.attach('Fist.R', this.socket, grip)
     this.head = model.getObjectByName('Head') ?? null
 
     // масштаб под рост и опора на пол
@@ -382,7 +371,7 @@ export class Avatar {
     }
     this.weaponObj = weaponMesh(id)
     // оружие чуть крупнее настоящего, чтобы читалось сверху
-    this.weaponObj.scale.setScalar(id === 'mop' ? 1 : id === 'lamp' ? 1.4 : 1.7)
+    this.weaponObj.scale.setScalar(id === 'mop' ? 1.1 : id === 'lamp' ? 1.6 : 2)
     this.socket.add(this.weaponObj)
   }
 

@@ -1,4 +1,4 @@
-// Офисные персонажи из CC0-паков Quaternius «Ultimate Modular Men / Women» (quaternius.com).
+// Офисные персонажи из CC0-пака Quaternius «Ultimate Animated Character Pack» (quaternius.com) — мультяшные, с большой головой.
 // Берём 4 модели, выкидываем пистолеты и ненужные анимации, сжимаем meshopt.
 // Запуск: node tools/build-office-chars.mjs <папка с распакованными паками>
 import { NodeIO } from '@gltf-transform/core'
@@ -8,17 +8,18 @@ import { MeshoptEncoder } from 'meshoptimizer'
 import path from 'node:path'
 
 const SRC = process.argv[2] ?? '/tmp/claude-0/pk'
-const MEN = path.join(SRC, 'Ultimate Modular Men- Feb 2022/Individual Characters/glTF')
-const WOMEN = path.join(SRC, 'Ultimate Modular Women - April 2022/Individual Characters/glTF')
+const DIR = path.join(SRC, 'Ultimate Animated Character Pack - Nov 2019/glTF')
 const CHARS = {
-  boss: path.join(MEN, 'Suit.gltf'),
-  courier: path.join(MEN, 'Casual_Hoodie.gltf'),
-  accountant: path.join(WOMEN, 'Suit.gltf'),
-  secretary: path.join(WOMEN, 'Formal.gltf'),
+  boss: path.join(DIR, 'Suit_Male.gltf'),
+  courier: path.join(DIR, 'Casual_Male.gltf'),
+  accountant: path.join(DIR, 'OldClassy_Female.gltf'),
+  secretary: path.join(DIR, 'Suit_Female.gltf'),
 }
-const KEEP = new Set(['Idle', 'Run', 'Walk', 'Sword_Slash', 'Punch_Right', 'Gun_Shoot', 'HitRecieve', 'Death', 'Roll'])
-// скелет одинаковый у всех; анимации храним только у одного персонажа каждого пака (мужского и женского)
-const ANIMS_FROM = { boss: true, accountant: true, courier: false, secretary: false }
+const KEEP = new Set(['Idle', 'Run', 'Walk', 'SwordSlash', 'Shoot_OneHanded', 'RecieveHit', 'Death', 'Roll'])
+// скелет одинаковый у всех — анимации храним только в файле босса
+const ANIMS_FROM = { boss: true, accountant: false, courier: false, secretary: false }
+// вещи, которые офису не нужны: цилиндр у бухгалтерши
+const DROP_MATERIALS = /^Hat$/
 const DROP_NODES = /pistol|gun|sword|knife|axe|shield/i
 
 await MeshoptEncoder.ready
@@ -35,6 +36,7 @@ for (const [id, file] of Object.entries(CHARS)) {
   // морф-цели (мимика) не нужны и весят больше всей модели
   for (const m of root.listMeshes()) { m.setWeights([]); for (const pr of m.listPrimitives()) {
     for (const t of pr.listTargets()) { pr.removeTarget(t); t.dispose() }
+    if (DROP_MATERIALS.test(pr.getMaterial()?.getName() ?? '')) { m.removePrimitive(pr); pr.dispose(); continue }
     // текстур нет — UV не нужны; нормали пересчитает плоское затенение
     for (const sem of ['TEXCOORD_0', 'TEXCOORD_1', 'NORMAL', 'COLOR_0']) pr.getAttribute(sem)?.dispose()
   } }

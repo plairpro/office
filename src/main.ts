@@ -251,7 +251,7 @@ function setPreview(id: CharacterId | null): void {
     const fwd = sel ? 0.7 : 0
     a.root.position.set(PREVIEW.x + SCREEN_RIGHT.x * k + fwd * Math.SQRT1_2, 0, PREVIEW.z + SCREEN_RIGHT.z * k + fwd * Math.SQRT1_2)
     a.root.scale.setScalar(sel ? 1.12 : 0.92)
-    if (sel) a.action('Unarmed_Melee_Attack_Punch_A', 1)
+    if (sel) a.action('SwordSlash', 1.2)
   })
 }
 
@@ -269,8 +269,8 @@ function makePortraits(): Record<CharacterId, string> {
   sc.add(d)
   // крупный план: голова и плечи
   const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 20)
-  cam.position.set(0.3, 1.68, 1.15)
-  cam.lookAt(0, 1.5, 0)
+  cam.position.set(0.35, 1.6, 1.9)
+  cam.lookAt(0, 1.3, 0)
   CHARACTER_ORDER.forEach((c, i) => {
     const a = new Avatar('', PLAYER_COLORS[i], c)
     a.animate(0.4, 0, 0.25)

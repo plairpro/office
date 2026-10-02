@@ -57,10 +57,10 @@ npm run build:single # всё в одном HTML-файле → dist-single/inde
 Мебель, кухня, модульные стены — CC0-паки **KayKit** от Kay Lousberg (kaylousberg.com).
 Сборка: `node tools/build-assets.mjs <папка с клонами паков>` → `src/assets/*.glb` (сжатие meshopt).
 
-Персонажи — CC0-паки **Ultimate Modular Men / Women** от Quaternius (quaternius.com): босс — Suit,
-курьер — Casual Hoodie, бухгалтерша — Suit (жен.), секретарша — Formal. Сборка:
+Персонажи — CC0-пак **Ultimate Animated Character Pack** от Quaternius (quaternius.com): босс — Suit_Male,
+курьер — Casual_Male, бухгалтер — OldClassy_Female (без цилиндра), секретарь — Suit_Female. Сборка:
 `node tools/build-office-chars.mjs <папка с распакованными паками>` → `src/assets/office_*.glb`
-(без пистолетов и лишних анимаций, ≈0.9 МБ на всех). Одежда перекрашивается по материалам, цвет игрока —
+(без лишних анимаций, ≈0.35 МБ на всех). Одежда перекрашивается по материалам, цвет игрока —
 на галстуке, кепке и бейдже (`src/game/avatar.ts`). Лицензии — `ASSETS_LICENSES.txt`.
 
 ## Карта и левел-дизайн
