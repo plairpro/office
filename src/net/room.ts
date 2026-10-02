@@ -87,7 +87,7 @@ export class NetRoom {
   private topic: string
   mySlot = -1
   /** диагностика: что приходит с каждого брокера, обрывы, почему кого-то потеряли */
-  readonly stats = { rx: [0, 0], tx: 0, closes: [0, 0], drops: [] as string[] }
+  readonly stats = { rx: [0, 0], tx: 0, closes: [0, 0], drops: [] as string[], rtt: [0, 0] }
   readonly atk: (m: AtkMsg) => void
   readonly hurt: (m: HurtMsg) => void
   readonly die: (m: DieMsg) => void
@@ -109,6 +109,7 @@ export class NetRoom {
       const c = mqtt.connect(url, {
         clientId: `or_${this.selfId}_${Math.random().toString(36).slice(2, 6)}`,
         clean: true,
+        protocolVersion: 5, // MQTT 5: можно не получать обратно свои же сообщения (вдвое меньше входящего трафика)
         connectTimeout: 8000,
         reconnectPeriod: 3000,
         keepalive: 20,
@@ -116,18 +117,23 @@ export class NetRoom {
         will: { topic: this.topic, payload: JSON.stringify({ f: this.selfId, s: -1, k: 'bye', d: null }), qos: 0, retain: false },
       })
       c.on('connect', () => {
-        c.subscribe(this.topic, { qos: 0 })
+        c.subscribe(this.topic, { qos: 0, nl: true })
+        c.subscribe(`${this.topic}/ping/${this.selfId}`, { qos: 0 })
         this.hello()
         ev.onLink?.()
       })
       c.on('close', () => { this.stats.closes[bi]++; ev.onLink?.() })
       c.on('error', (e) => console.warn('[net]', url, e.message))
-      c.on('message', (_t, buf) => { this.stats.rx[bi]++; this.receive(buf) })
+      c.on('message', (t, buf) => { if (t === this.topic) this.stats.rx[bi]++; this.receive(buf, bi) })
       this.clients.push(c)
     })
     // раз в 2 секунды — «я тут»: так находим друг друга и замечаем ушедших
     this.timer = window.setInterval(() => {
       this.hello()
+      // пинг: шлём себе через каждый брокер и меряем, через сколько вернулось
+      this.clients.forEach((c, bi) => {
+        if (c.connected) c.publish(`${this.topic}/ping/${this.selfId}`, JSON.stringify({ f: this.selfId, s: 0, k: 'ping', d: [bi, performance.now()] }), { qos: 0 })
+      })
       const now = Date.now()
       for (const [id, t] of this.lastHeard) if (now - t > PEER_TIMEOUT) this.drop(id, `тишина ${now - t} мс`)
     }, 2000)
@@ -142,18 +148,27 @@ export class NetRoom {
     const env: Envelope = { f: this.selfId, s: ++this.seq, k, d }
     if (to) env.to = to
     const payload = JSON.stringify(env)
-    let sent = false
-    for (const c of this.clients) {
-      if (!c.connected || (one && sent)) continue
-      c.publish(this.topic, payload, { qos: 0 })
-      sent = true
+    if (one) {
+      // частые сообщения — через самый быстрый из живых брокеров
+      let best = -1
+      this.clients.forEach((c, i) => {
+        if (c.connected && (best < 0 || (this.stats.rtt[i] || 9999) < (this.stats.rtt[best] || 9999))) best = i
+      })
+      if (best >= 0) this.clients[best].publish(this.topic, payload, { qos: 0 })
+    } else {
+      for (const c of this.clients) if (c.connected) c.publish(this.topic, payload, { qos: 0 })
     }
     this.stats.tx++
   }
 
-  private receive(buf: Uint8Array): void {
+  private receive(buf: Uint8Array, bi: number): void {
     let env: Envelope
     try { env = JSON.parse(new TextDecoder().decode(buf)) } catch { return }
+    if (env?.k === 'ping' && env.f === this.selfId && Array.isArray(env.d) && env.d[0] === bi) {
+      const rtt = performance.now() - Number(env.d[1])
+      this.stats.rtt[bi] = this.stats.rtt[bi] ? this.stats.rtt[bi] * 0.7 + rtt * 0.3 : rtt
+      return
+    }
     if (!env || typeof env.f !== 'string' || env.f === this.selfId || typeof env.k !== 'string') return
     if (env.to && env.to !== this.selfId) return
     if (env.k === 'bye') {

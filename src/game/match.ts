@@ -422,7 +422,25 @@ export class Match {
         const r = this.meleeCheck(p.x, p.z, p.a, w, v)
         if (r) this.receiveHit(v, w, by.id, r.dx, r.dz, r.back)
       }
+      // наш удар по живому игроку: урон посчитает он сам, а кровь и звук показываем сразу, не дожидаясь ответа по сети
+      if (by.kind === 'local') {
+        for (const v of this.fighters.values()) {
+          if (v.kind !== 'remote' || v.dead || v.flags & F_INVULN) continue
+          const r = this.meleeCheck(p.x, p.z, p.a, w, v)
+          if (r) this.predictHit(v, w, r.dx, r.dz, r.back)
+        }
+      }
     }
+  }
+
+  /** Предсказанные попадания: id жертвы → время. Когда придёт подтверждение — второй раз эффекты не рисуем */
+  private predicted = new Map<string, number>()
+
+  private predictHit(v: Fighter, w: WeaponDef, dx: number, dz: number, back: boolean): void {
+    const n = Math.round(w.damage * (back && w.backstabMultiplier ? w.backstabMultiplier : 1))
+    this.hitFx(v, n, dx, dz, back ? 2 : 0, w.id)
+    this.predicted.set(v.id, this.time)
+    this.hooks.onShake(0.08)
   }
 
   /** Кого этот атакующий может задеть с точки зрения нашего клиента */
@@ -469,9 +487,10 @@ export class Match {
       const owner = this.fighters.get(p.owner)
       if (victim) {
         const local = victim.kind === 'local' || (victim.kind === 'dummy' && owner?.kind === 'local')
-        if (local && victim.invuln <= 0) {
-          const d = Math.hypot(p.vx, p.vz)
-          this.receiveHit(victim, WEAPONS[p.w], p.owner, p.vx / d, p.vz / d, false)
+        const d = Math.hypot(p.vx, p.vz)
+        if (local && victim.invuln <= 0) this.receiveHit(victim, WEAPONS[p.w], p.owner, p.vx / d, p.vz / d, false)
+        else if (victim.kind === 'remote' && owner?.kind === 'local' && !(victim.flags & F_INVULN)) {
+          this.predictHit(victim, WEAPONS[p.w], p.vx / d, p.vz / d, false)
         }
         this.killProjectile(i)
         continue
@@ -769,8 +788,10 @@ export class Match {
       return
     }
     v.hp = Math.max(0, v.hp - m.n)
+    // своё попадание мы уже показали заранее — второй раз кровь не рисуем
+    const pt = this.predicted.get(id)
+    if (m.by === this.local?.id && pt !== undefined && this.time - pt < 1.2) { this.predicted.delete(id); return }
     this.hitFx(v, m.n, m.dx, m.dz, m.k, w)
-    if (m.by === this.local?.id) this.hooks.onShake(0.08) // «попал!» — лёгкая отдача у атакующего
   }
 
   onDie(id: string, m: DieMsg): void {

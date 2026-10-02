@@ -526,7 +526,7 @@ function frame(time: number): void {
       // диагностика связи в настройках: серверы, входящие сообщения в секунду, обрывы, последняя потеря игрока
       const st = net.stats, r = net.relaysOnline()
       const rx = st.rx[0] + st.rx[1]
-      $('netdiag').textContent = `связь ${r.open}/${r.total} · ↓${Math.round((rx - lastRx) / diagAcc)}/с · обрывы ${st.closes.join('/')}` + (st.drops.length ? ` · ${st.drops[st.drops.length - 1]}` : '')
+      $('netdiag').textContent = `связь ${r.open}/${r.total} · пинг ${st.rtt.map((v) => (v ? Math.round(v) : '–')).join('/')} мс · ↓${Math.round((rx - lastRx) / diagAcc)}/с · обрывы ${st.closes.join('/')}` + (st.drops.length ? ` · ${st.drops[st.drops.length - 1]}` : '')
       lastRx = rx
       diagAcc = 0
     }
