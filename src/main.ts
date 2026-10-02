@@ -377,7 +377,8 @@ async function startGame(code: string | null): Promise<void> {
     onPeerHello: () => rosterChanged(),
     onPeerLeave: (id) => {
       const f = match?.fighters.get(id)
-      if (f) showToast(`${f.name} ушёл из офиса`, 2500)
+      const why = net?.stats.drops[net.stats.drops.length - 1]?.split(': ').pop() ?? ''
+      if (f) showToast(`${f.name} ушёл из офиса${why && why !== 'вышел' ? ` (${why})` : ''}`, 3500)
       match?.remove(id)
       rosterChanged()
     },
@@ -486,6 +487,7 @@ timer.connect(document)
 let sendAcc = 0
 let fpsAcc = 0, fpsFrames = 0
 let scoreAcc = 0
+let diagAcc = 0, lastRx = 0
 
 function frame(time: number): void {
   timer.update(time)
@@ -519,6 +521,15 @@ function frame(time: number): void {
     renderHud()
     scoreAcc += dt
     if (scoreAcc > 0.5) { scoreAcc = 0; renderScore() }
+    diagAcc += dt
+    if (net && diagAcc > 1) {
+      // диагностика связи в настройках: серверы, входящие сообщения в секунду, обрывы, последняя потеря игрока
+      const st = net.stats, r = net.relaysOnline()
+      const rx = st.rx[0] + st.rx[1]
+      $('netdiag').textContent = `связь ${r.open}/${r.total} · ↓${Math.round((rx - lastRx) / diagAcc)}/с · обрывы ${st.closes.join('/')}` + (st.drops.length ? ` · ${st.drops[st.drops.length - 1]}` : '')
+      lastRx = rx
+      diagAcc = 0
+    }
   } else {
     // в меню камера смотрит на выбранного персонажа
     camTarget.set(PREVIEW.x + 0.35, 0.95, PREVIEW.z + 0.35)

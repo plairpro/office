@@ -62,7 +62,7 @@ const BROKERS = [
 ]
 
 const PREFIX = `office-rage/${GAME.net.appId}`
-const PEER_TIMEOUT = 10000 // молчит дольше — считаем, что ушёл
+const PEER_TIMEOUT = 15000 // молчит дольше — считаем, что ушёл
 
 type Envelope = { f: string; s: number; k: string; d: unknown; to?: string }
 
@@ -137,12 +137,17 @@ export class NetRoom {
     this.send('hello', { name: this.myName, joinedAt: this.joinedAt, character: this.myCharacter, slot: this.mySlot, v: __BUILD__ } satisfies Hello, to)
   }
 
-  private send(k: string, d: unknown, to?: string): void {
+  private send(k: string, d: unknown, to?: string, one = false): void {
     if (this.left) return
     const env: Envelope = { f: this.selfId, s: ++this.seq, k, d }
     if (to) env.to = to
     const payload = JSON.stringify(env)
-    for (const c of this.clients) if (c.connected) c.publish(this.topic, payload, { qos: 0 })
+    let sent = false
+    for (const c of this.clients) {
+      if (!c.connected || (one && sent)) continue
+      c.publish(this.topic, payload, { qos: 0 })
+      sent = true
+    }
     this.stats.tx++
   }
 
@@ -249,7 +254,9 @@ export class NetRoom {
   }
 
   broadcastState(s: StatePacket): void {
-    if (this.peers.size) this.send('st', s)
+    // позиции — самые частые сообщения: шлём через один брокер (первый живой), чтобы не упереться в лимиты.
+    // Удары, урон и смерть идут через оба — их терять нельзя
+    if (this.peers.size) this.send('st', s, undefined, true)
   }
 
   leave(): void {

@@ -469,3 +469,6 @@ html, body {
 /* «Позвать коллег» — изумрудная, полупрозрачная */
 .btn.primary.invite { background: rgba(18, 160, 118, 0.72); box-shadow: 0 3px 0 rgba(10, 100, 72, 0.6); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
 .btn.primary.invite:hover { background: rgba(18, 160, 118, 0.88); }
+
+#netdiag { font-size: 11px; max-width: 360px; white-space: normal; }
+.panel.fps.open { flex-wrap: wrap; }

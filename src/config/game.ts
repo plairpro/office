@@ -10,7 +10,7 @@ export const GAME = {
   },
   net: {
     appId: 'office-rage-plairpro-v1',
-    sendRateHz: 15,
+    sendRateHz: 10,
     roomCodeLength: 4,
   },
   camera: {
