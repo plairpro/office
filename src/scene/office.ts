@@ -175,7 +175,6 @@ export function buildOffice(): Office {
   // ---------- рабочая зона «Север»: столы, между ними высокие перегородки ----------
   for (const x of [-2.6, 1.8, 6.2]) desk(b, p, x, -11.4, 0)
   for (const x of [-0.4, 4]) acoustic(b, x, -11.3, 2.6, Math.PI / 2)
-  sign(p, 'Отдел продаж', 1.8, 0.02, -8.6, 0, 2.2, MV.lavender, true)
 
   // ---------- рабочая зона «Запад» и лестница в никуда ----------
   desk(b, p, -11.2, 0.4, Math.PI / 2)
@@ -267,7 +266,6 @@ function centerArena(b: StaticBuilder, p: Placer): { x: number; z: number; radiu
   // внутри: кулер в центре, пара пуфов (низкое укрытие)
   waterCooler(b, 0, 0, 2.4)
   for (const [x, z, c] of [[-1.8, 1.6, MV.mint], [1.8, 1.6, MV.lilac], [-1.9, -1.2, MV.mustard], [1.9, -1.2, MV.blush]] as const) pouf(b, x, z, c)
-  sign(p, 'Презентационная зона', 0, 0.025, hz + 0.75, 0, 3, MV.coral, true)
   return { x: 0, z: 0, radius: 2.4 }
 }
 

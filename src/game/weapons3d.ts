@@ -12,6 +12,7 @@ import type { WeaponId } from '../config/game'
 
 type MatKey = 'yellow' | 'yellowDark' | 'black' | 'steel' | 'chrome' | 'blue' | 'grey' | 'teal' | 'white' | 'mint'
   | 'sage' | 'led' | 'gold' | 'bill' | 'billDark' | 'body' | 'grip' | 'cup' | 'lid' | 'sleeve' | 'red'
+  | 'wood' | 'woodDark' | 'straw' | 'strawDark'
 
 const MAT: Record<MatKey, THREE.MeshStandardMaterialParameters> = {
   yellow: { color: 0xf3c94f, roughness: 0.45 },
@@ -35,6 +36,10 @@ const MAT: Record<MatKey, THREE.MeshStandardMaterialParameters> = {
   lid: { color: MV.coral, roughness: 0.4 },
   sleeve: { color: MV.peach, roughness: 0.85 },
   red: { color: 0xd3122a, roughness: 0.5 },
+  wood: { color: 0xe9d3a6, roughness: 0.7 },
+  woodDark: { color: 0xd6b27c, roughness: 0.7 },
+  straw: { color: 0xf3cf3a, roughness: 0.75 },
+  strawDark: { color: 0xe0b52a, roughness: 0.75 },
 }
 
 /** Набор деталей: копим геометрию по материалам, в конце склеиваем */
@@ -190,34 +195,25 @@ function stapler(): THREE.Group {
   return k.build()
 }
 
-// ---------- швабра: серая ручка, бирюзовые наконечник и муфта, пышная бахрома ----------
+// ---------- швабра-щётка: деревянная ручка, деревянная колодка, жёлтая щетина ----------
 function mop(): THREE.Group {
   const k = new Kit()
-  k.cylZ(0.014, 0.014, 1.32, 'grey', 0, 0, 0.42, 14)
-  k.latheZ([[0, -0.29], [0.016, -0.29], [0.017, -0.27], [0.016, -0.22], [0.0145, -0.215], [0, -0.215]], 'teal', 0, 0, 0)
-  k.cylZ(0.013, 0.013, 0.03, 'teal', 0, 0, -0.185, 14)
-  // муфта: расширяется к бахроме
-  k.latheZ([[0.0145, 1.07], [0.02, 1.08], [0.024, 1.12], [0.04, 1.14], [0.046, 1.16], [0.03, 1.165], [0, 1.165]], 'teal', 0, 0, 0)
-  // бахрома: две юбки полосок, раскрываются конусом и свисают
-  const strip = (len: number) => new THREE.BoxGeometry(0.042, 0.005, len)
-  const N = 24
-  for (let ring = 0; ring < 3; ring++) {
-    for (let i = 0; i < N; i++) {
-      const a = (i / N) * Math.PI * 2 + ring * 0.13
-      const len = 0.34 + ((i * 7) % 5) * 0.018 - ring * 0.04
-      const spread = 0.45 + ring * 0.3 + ((i * 3) % 4) * 0.06
-      const g = strip(len)
-      g.translate(0, 0, len / 2)
-      // наклон полоски наружу от оси, затем поворот вокруг оси
-      g.rotateX(-spread)
-      g.rotateZ(a)
-      k.add(g, i % 3 === 0 ? 'mint' : 'white', 0, 0, 1.15)
+  k.cylZ(0.015, 0.015, 1.36, 'wood', 0, 0, 0.42, 14)
+  k.latheZ([[0, -0.27], [0.012, -0.268], [0.015, -0.255], [0, -0.255]], 'wood', 0, 0, 0) // скруглённый торец
+  // колодка поперёк ручки
+  k.box(0.36, 0.045, 0.07, 'woodDark', 0, 0, 1.12, 0.008)
+  k.cylZ(0.019, 0.017, 0.04, 'woodDark', 0, 0.0, 1.075, 12) // гнездо ручки
+  // щетина: пучки рядами, концы чуть веером
+  for (let row = 0; row < 3; row++) {
+    for (let i = 0; i < 24; i++) {
+      const x = -0.165 + i * (0.33 / 23)
+      const len = 0.1 + ((i * 7 + row * 3) % 5) * 0.006
+      const g = new THREE.BoxGeometry(0.009, len, 0.012)
+      g.translate(0, -len / 2, 0)
+      g.rotateZ(x * 0.9) // крайние пучки расходятся
+      g.rotateX((row - 1) * 0.12)
+      k.add(g, i % 4 === row ? 'strawDark' : 'straw', x, -0.02, 1.1 + row * 0.022)
     }
-  }
-  // крапинки на полосках — как на фото
-  for (let i = 0; i < 40; i++) {
-    const a = i * 2.39, r = 0.08 + (i % 5) * 0.035
-    k.box(0.014, 0.008, 0.014, 'teal', Math.cos(a) * r, Math.sin(a) * r, 1.22 + (i % 4) * 0.04, 0.003)
   }
   return k.build()
 }
@@ -225,7 +221,7 @@ function mop(): THREE.Group {
 // ---------- настольная лампа: квадратное основание, тонкая ножка, конический абажур ----------
 function lamp(): THREE.Group {
   const k = new Kit()
-  // держат за ножку; тяжёлое основание — ударная часть (впереди, +Z), абажур — сзади
+  // модель собрана основанием к +Z; в weaponMesh разворачивается абажуром вперёд
   k.box(0.14, 0.14, 0.022, 'sage', 0, 0, 0.19, 0.006)
   // ножка с расширением у основания
   k.latheZ([[0, 0.18], [0.03, 0.18], [0.012, 0.165], [0.007, 0.14], [0.006, 0.1], [0, 0.1]], 'sage', 0, 0, 0)
@@ -284,7 +280,15 @@ export function weaponMesh(id: WeaponId | 'coffee'): THREE.Group {
     case 'cutter': return cutter()
     case 'stapler': return stapler()
     case 'mop': return mop()
-    case 'lamp': return lamp()
+    case 'lamp': {
+      // держат у основания, абажур — наружу: им и бьют
+      const outer = new THREE.Group()
+      const inner = lamp()
+      inner.rotation.y = Math.PI
+      inner.position.z = 0.13
+      outer.add(inner)
+      return outer
+    }
     case 'moneygun': return moneygun()
     case 'coffee': return coffee()
   }

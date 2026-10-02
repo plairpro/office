@@ -1,4 +1,4 @@
-import { joinRoom, selfId, type Room } from 'trystero'
+import { joinRoom, selfId, getRelaySockets, type Room } from 'trystero'
 import { GAME, CHARACTERS, type CharacterId } from '../config/game'
 
 /**
@@ -37,6 +37,8 @@ export interface NetEvents {
   onPeerLeave(id: string): void
   onPeerState(id: string, s: StatePacket): void
   onRoomFull(): void
+  /** Нашли игрока через сервер поиска, но прямое соединение не установилось */
+  onJoinError?(msg: string): void
   onAtk(id: string, m: AtkMsg): void
   onHurt(id: string, m: HurtMsg): void
   onDie(id: string, m: DieMsg): void
@@ -64,8 +66,19 @@ export class NetRoom {
     private myName: string,
     private myCharacter: CharacterId,
     ev: NetEvents,
+    ice: RTCIceServer[],
   ) {
-    this.room = joinRoom({ appId: GAME.net.appId }, `room-${code}`)
+    this.room = joinRoom(
+      {
+        appId: GAME.net.appId,
+        // проверенные публичные релеи: через них браузеры находят друг друга
+        relayConfig: { urls: RELAYS },
+        // STUN — узнать свой адрес; TURN — ретранслятор, если напрямую не пускает сеть (мобильный интернет, офисный Wi-Fi)
+        rtcConfig: { iceServers: ice },
+      },
+      `room-${code}`,
+      { onJoinError: (d) => { console.warn('[net] join error', d); ev.onJoinError?.(String(d.error ?? 'нет соединения')) } },
+    )
 
     const hello = this.room.makeAction<Hello>('hello')
     const state = this.room.makeAction<StatePacket>('st')
@@ -130,6 +143,12 @@ export class NetRoom {
       .sort((a, b) => a.joinedAt - b.joinedAt || (a.id < b.id ? -1 : 1))
   }
 
+  /** Сколько серверов поиска сейчас на связи */
+  relaysOnline(): { open: number; total: number } {
+    const socks = Object.values(getRelaySockets() as Record<string, WebSocket>)
+    return { open: socks.filter((s) => s?.readyState === WebSocket.OPEN).length, total: RELAYS.length }
+  }
+
   rankOf(id: string): number {
     return this.ordered().findIndex((p) => p.id === id)
   }
@@ -156,4 +175,39 @@ export function makeRoomCode(): string {
 export function readRoomCode(): string | null {
   const m = location.hash.match(/^#([A-Z0-9]{4,8})$/i)
   return m ? m[1].toUpperCase() : null
+}
+
+const RELAYS = [
+  'wss://nos.lol',
+  'wss://relay.damus.io',
+  'wss://relay.primal.net',
+  'wss://nostr.mom',
+  'wss://relay.nostr.band',
+  'wss://offchain.pub',
+  'wss://relay.snort.social',
+  'wss://nostr-pub.wellorder.net',
+]
+
+/**
+ * Список ICE-серверов. TURN — бесплатный Open Relay (metered.ca): у него опубликован общий секрет
+ * для «статической» авторизации, по нему временный логин/пароль считаются прямо в браузере (стандарт TURN REST).
+ */
+export async function iceServers(): Promise<RTCIceServer[]> {
+  const list: RTCIceServer[] = [
+    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
+  ]
+  try {
+    const username = `${Math.floor(Date.now() / 1000) + 24 * 3600}:office-rage`
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode('openrelayprojectsecret'), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign'])
+    const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(username)))
+    const credential = btoa(String.fromCharCode(...sig))
+    const host = 'staticauth.openrelay.metered.ca'
+    list.push({
+      urls: [`turn:${host}:80`, `turn:${host}:443`, `turn:${host}:443?transport=tcp`, `turns:${host}:443?transport=tcp`],
+      username, credential,
+    })
+  } catch (e) {
+    console.warn('[net] TURN недоступен', e)
+  }
+  return list
 }

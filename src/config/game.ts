@@ -70,6 +70,8 @@ export const MATCH = {
   spawnProtect: 1.5, // неуязвимость после возрождения
   pickupRespawn: 12, // оружие на полу появляется снова
   coffeeHeal: 30,
+  coffeeBuzz: 5, // секунд «бодрости» после кофе
+  coffeeSpeed: 1.25, // во сколько раз быстрее бег под кофеином
   winPause: 7, // сколько висит экран победителя
 } as const
 

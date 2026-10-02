@@ -9,6 +9,7 @@ import { MV } from '../scene/palette'
 import { Avatar, stepBody, type Body } from './avatar'
 import { Fx } from './fx'
 import { weaponMesh, projectileMesh } from './weapons3d'
+import { sfx, type SoundName } from './sfx'
 import {
   F_BLEED, F_DEAD, F_INVULN, F_SLOW, F_STUN,
   type AtkMsg, type DieMsg, type HurtMsg, type PickMsg, type StatePacket,
@@ -58,6 +59,7 @@ export interface Fighter {
   lastBy: string
   lastW: WeaponId
   turnIn: number // манекены иногда поворачиваются
+  buzz: number // бодрость после кофе
   home: { x: number; z: number; f: number }
 }
 
@@ -96,10 +98,11 @@ interface Projectile {
 
 interface PendingMelee { t: number; by: string; w: WeaponId; a: number }
 
-interface Pickup { spot: PickupSpot; mesh: THREE.Group; respawnIn: number }
+interface Pickup { spot: PickupSpot; mesh: THREE.Group; ring: THREE.Sprite; extras: THREE.Object3D[]; respawnIn: number }
 
 const DEG = Math.PI / 180
 const SHOT_Y = 1.15
+const HIT_SOUND: Record<WeaponId, SoundName> = { cutter: 'hitCut', stapler: 'hitStaple', mop: 'hitBroom', lamp: 'hitLamp', moneygun: 'hitMoney' }
 
 export class Match {
   readonly fighters = new Map<string, Fighter>()
@@ -130,16 +133,33 @@ export class Match {
       item.position.y = 0.75
       if (spot.kind === 'mop') { item.rotation.x = -0.9; item.position.set(0, 0.4, -0.5) }
       mesh.add(item)
-      const ring = new THREE.Mesh(
-        new THREE.RingGeometry(0.42, 0.52, 28),
-        new THREE.MeshBasicMaterial({ color: spot.kind === 'coffee' ? MV.mint : MV.mustard, transparent: true, opacity: 0.85, depthWrite: false }),
-      )
-      ring.rotation.x = -Math.PI / 2
-      ring.position.y = 0.02
+      // свечение вокруг предмета вместо кольца на полу
+      const ring = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: glowTexture(), color: spot.kind === 'coffee' ? 0x9ff0d0 : 0xffe29a,
+        transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending,
+      }))
+      ring.userData.size = spot.kind === 'mop' ? 1.5 : 1.1
+      ring.position.set(0, spot.kind === 'mop' ? 0.45 : 0.78, spot.kind === 'mop' ? 0.1 : 0)
       mesh.add(ring)
+      const extras: THREE.Object3D[] = []
+      if (spot.kind === 'coffee') {
+        // пар над стаканом и парящий «+»: сразу понятно, что это лечит
+        for (let i = 0; i < 4; i++) {
+          const puff = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTexture(), transparent: true, depthWrite: false, opacity: 0.7 }))
+          puff.userData.phase = i / 4
+          mesh.add(puff)
+          extras.push(puff)
+        }
+        const plus = new THREE.Sprite(new THREE.SpriteMaterial({ map: plusTexture(), transparent: true, depthTest: false }))
+        plus.scale.set(0.42, 0.42, 1)
+        plus.renderOrder = 12
+        plus.userData.plus = true
+        mesh.add(plus)
+        extras.push(plus)
+      }
       mesh.position.set(spot.x, 0, spot.z)
       scene.add(mesh)
-      this.pickups.push({ spot, mesh, respawnIn: 0 })
+      this.pickups.push({ spot, mesh, ring, extras, respawnIn: 0 })
     }
   }
 
@@ -158,7 +178,7 @@ export class Match {
       target: { x, z, vx: 0, vz: 0 }, lastAt: performance.now(), flags: 0,
       cooldown: 0, respawnIn: 0, invuln: kind === 'local' ? MATCH.spawnProtect : 0,
       bleed: 0, bleedDps: 0, bleedBy: '', bleedAcc: 0, slow: 0, slowFactor: 1, stun: 0, disarm: 0, dripAcc: 0,
-      lastBy: '', lastW: 'cutter', turnIn: 2 + Math.random() * 3, home: { x, z, f },
+      lastBy: '', lastW: 'cutter', buzz: 0, turnIn: 2 + Math.random() * 3, home: { x, z, f },
     }
     this.fighters.set(id, fighter)
     return fighter
@@ -243,7 +263,7 @@ export class Match {
     if (f.dead) return
 
     const stunned = f.stun > 0
-    const mul = ch.moveMul * (f.slow > 0 ? f.slowFactor : 1)
+    const mul = ch.moveMul * (f.slow > 0 ? f.slowFactor : 1) * (f.buzz > 0 ? MATCH.coffeeSpeed : 1)
     stepBody(f.body, stunned ? 0 : ctl.move.x, stunned ? 0 : ctl.move.z, dt, this.office.colliders, mul, ch.radius)
     const speed = Math.hypot(f.body.vx, f.body.vz)
 
@@ -267,7 +287,7 @@ export class Match {
       this.startAttack(f, m)
       this.net?.atk(m)
       if (w.id === 'lamp') this.hooks.onShake(0.15)
-      if (f.ammo > 0 && --f.ammo === 0) this.equip(f, 'cutter')
+      if (f.ammo > 0 && --f.ammo === 0) { this.equip(f, 'cutter'); sfx.play('empty') }
     }
 
     f.avatar.root.position.set(f.body.x, 0, f.body.z)
@@ -327,6 +347,7 @@ export class Match {
   private tickEffects(f: Fighter, dt: number): void {
     f.invuln = Math.max(0, f.invuln - dt)
     f.slow = Math.max(0, f.slow - dt)
+    f.buzz = Math.max(0, f.buzz - dt)
     f.stun = Math.max(0, f.stun - dt)
     f.disarm = Math.max(0, f.disarm - dt)
     if (f.bleed > 0) {
@@ -362,6 +383,7 @@ export class Match {
     const asm = CHARACTERS[f.character].attackSpeedMul
     f.avatar.action(w.clip, w.animSpeed * asm)
     if (f.kind !== 'local') f.facing = m.a
+    sfx.play(w.id === 'stapler' ? 'staple' : w.id === 'moneygun' ? 'money' : w.id === 'lamp' || w.id === 'mop' ? 'swingHeavy' : 'swing', m.x, m.z)
     if (w.type === 'ranged') {
       const rng = mulberry32(m.s)
       const n = w.pellets ?? 1
@@ -475,6 +497,7 @@ export class Match {
     if (ch.dodge && Math.random() < ch.dodge) {
       this.fx.floatText('Уклон!', v.body.x, 2.2, v.body.z, '#4fb3a9')
       v.avatar.action('Dodge_Forward', 2)
+      sfx.play('dodge', v.body.x, v.body.z)
       if (v.kind === 'local') this.net?.hurt({ n: 0, dx, dz, w: wIdx, k: 1, by: byId })
       return
     }
@@ -509,6 +532,7 @@ export class Match {
     const heavy = w === 'lamp' ? 1.8 : w === 'moneygun' ? 0.5 : 1
     this.fx.hit(v.body.x, 1.2, v.body.z, dx, dz, heavy * (k === 2 ? 1.8 : 1))
     v.avatar.flash()
+    sfx.play(HIT_SOUND[w], v.body.x, v.body.z)
     if (w === 'lamp' || k === 2) v.avatar.action('Hit_A', 1.6)
     const txt = k === 2 ? `В спину! ${n}` : String(n)
     this.fx.floatText(txt, v.body.x + (Math.random() - 0.5) * 0.4, 2.3, v.body.z, k === 2 ? '#d3122a' : '#7c5a8c')
@@ -546,6 +570,8 @@ export class Match {
     // убийце — очко (у себя считаем сразу, остальным он сам разошлёт счёт)
     const killer = this.fighters.get(byId) ?? null
     if (killer && killer !== v) killer.kills++
+    sfx.play('death', v.body.x, v.body.z)
+    if (killer && killer.kind === 'local' && killer !== v) setTimeout(() => sfx.play('kill'), 250)
     this.hooks.onKill(killer && killer !== v ? killer : null, v, w)
   }
 
@@ -591,9 +617,10 @@ export class Match {
     f.hp = f.maxHp
     f.invuln = MATCH.spawnProtect
     f.cooldown = 0.3
-    f.bleed = f.slow = f.stun = f.disarm = 0
+    f.bleed = f.slow = f.stun = f.disarm = f.buzz = 0
     this.equip(f, 'cutter')
     f.avatar.revive()
+    sfx.play('respawn')
     this.hooks.onLocalRespawn()
   }
 
@@ -616,18 +643,33 @@ export class Match {
       const item = p.mesh.children[0]
       item.rotation.y += dt * 1.6
       item.position.y = (p.spot.kind === 'mop' ? 0.4 : 0.75) + Math.sin(this.time * 2.5 + i) * 0.08
-      if (!me || me.dead || Math.hypot(me.body.x - p.spot.x, me.body.z - p.spot.z) > 0.9) return
+      // свечение мягко дышит
+      const pulse = p.ring.userData.size * (1 + Math.sin(this.time * 4 + i) * 0.1)
+      p.ring.scale.set(pulse, pulse, 1)
+      p.ring.position.y = item.position.y + (p.spot.kind === 'mop' ? 0.05 : 0.03)
+      for (const e of p.extras) {
+        if (e.userData.plus) { e.position.y = 1.55 + Math.sin(this.time * 3 + i) * 0.06; continue }
+        const t = (this.time * 0.6 + e.userData.phase) % 1
+        e.position.set(Math.sin(t * 9 + i) * 0.06, 1.0 + t * 0.7, 0)
+        const sc = 0.12 + t * 0.22
+        e.scale.set(sc, sc, 1)
+        ;(e as THREE.Sprite).material.opacity = 0.65 * (1 - t)
+      }
+      if (!me || me.dead || Math.hypot(me.body.x - p.spot.x, me.body.z - p.spot.z) > 1.0) return
       const k = p.spot.kind
       if (k === 'coffee') {
-        if (me.hp >= me.maxHp) return
-        me.hp = Math.min(me.maxHp, me.hp + MATCH.coffeeHeal)
+        // кофе берётся всегда: лечит, останавливает кровь и бодрит
+        const healed = Math.min(me.maxHp, me.hp + MATCH.coffeeHeal) - me.hp
+        me.hp += healed
         me.bleed = 0
-        this.fx.floatText(`+${MATCH.coffeeHeal}`, me.body.x, 2.3, me.body.z, '#2f9e6a')
+        me.buzz = MATCH.coffeeBuzz
+        this.fx.floatText(healed > 0 ? `+${Math.round(healed)} ☕` : 'Бодрость! ☕', me.body.x, 2.3, me.body.z, '#2f9e6a')
       } else {
         if (me.weapon === k && (me.ammo < 0 || me.ammo === WEAPONS[k].ammo)) return
         this.equip(me, k)
         this.fx.floatText(WEAPONS[k].name, me.body.x, 2.3, me.body.z, '#4d4a7d')
       }
+      sfx.play(k === 'coffee' ? 'coffee' : 'pickup')
       this.take(i)
       this.net?.pick({ i })
       this.hooks.onPickup(k)
@@ -652,6 +694,7 @@ export class Match {
     for (const f of this.fighters.values()) {
       if (f.kind !== 'dummy' && f.kills >= MATCH.killsToWin) {
         this.winIn = MATCH.winPause
+        sfx.play('win')
         this.hooks.onWin(f)
         return
       }
@@ -715,6 +758,7 @@ export class Match {
     if (m.k === 1) {
       this.fx.floatText('Уклон!', v.body.x, 2.2, v.body.z, '#4fb3a9')
       v.avatar.action('Dodge_Forward', 2)
+      sfx.play('dodge', v.body.x, v.body.z)
       return
     }
     v.hp = Math.max(0, v.hp - m.n)
@@ -796,3 +840,52 @@ function segCircle(ax: number, az: number, bx: number, bz: number, cx: number, c
   return t >= 0 && t <= 1 ? t : null
 }
 
+
+// ---------- текстуры для кофе ----------
+
+let puffTex: THREE.Texture | null = null
+function puffTexture(): THREE.Texture {
+  if (puffTex) return puffTex
+  const c = document.createElement('canvas')
+  c.width = c.height = 64
+  const g = c.getContext('2d')!
+  const gr = g.createRadialGradient(32, 32, 2, 32, 32, 30)
+  gr.addColorStop(0, 'rgba(255,255,255,0.95)')
+  gr.addColorStop(1, 'rgba(255,255,255,0)')
+  g.fillStyle = gr
+  g.fillRect(0, 0, 64, 64)
+  puffTex = new THREE.CanvasTexture(c)
+  return puffTex
+}
+
+let plusTex: THREE.Texture | null = null
+function plusTexture(): THREE.Texture {
+  if (plusTex) return plusTex
+  const c = document.createElement('canvas')
+  c.width = c.height = 128
+  const g = c.getContext('2d')!
+  g.fillStyle = 'rgba(255,250,246,0.95)'
+  g.beginPath(); g.arc(64, 64, 56, 0, Math.PI * 2); g.fill()
+  g.fillStyle = '#2fae7a'
+  g.fillRect(52, 26, 24, 76)
+  g.fillRect(26, 52, 76, 24)
+  plusTex = new THREE.CanvasTexture(c)
+  plusTex.colorSpace = THREE.SRGBColorSpace
+  return plusTex
+}
+
+let glowTex: THREE.Texture | null = null
+function glowTexture(): THREE.Texture {
+  if (glowTex) return glowTex
+  const c = document.createElement('canvas')
+  c.width = c.height = 128
+  const g = c.getContext('2d')!
+  const gr = g.createRadialGradient(64, 64, 4, 64, 64, 62)
+  gr.addColorStop(0, 'rgba(255,255,255,0.9)')
+  gr.addColorStop(0.35, 'rgba(255,255,255,0.45)')
+  gr.addColorStop(1, 'rgba(255,255,255,0)')
+  g.fillStyle = gr
+  g.fillRect(0, 0, 128, 128)
+  glowTex = new THREE.CanvasTexture(c)
+  return glowTex
+}

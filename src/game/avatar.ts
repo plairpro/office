@@ -341,14 +341,15 @@ export class Avatar {
     }
     this.play('idle', 0)
 
-    // кольцо цвета игрока
+    // мягкая тень под ногами: солнце в офисе закрыто потолком, поэтому контактная тень рисуется отдельно
     const r = CHARACTERS[character].radius
     this.ring = new THREE.Mesh(
-      new THREE.RingGeometry(r + 0.05, r + 0.14, 40),
-      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, toneMapped: false }),
+      new THREE.PlaneGeometry(r * 3.2, r * 3.2),
+      new THREE.MeshBasicMaterial({ map: blobTexture(), color: 0x3d3557, transparent: true, opacity: 0.42, depthWrite: false }),
     )
     this.ring.rotation.x = -Math.PI / 2
-    this.ring.position.y = 0.03
+    this.ring.position.y = 0.02
+    this.ring.renderOrder = 2
     this.root.add(this.ring)
 
     this.label = makeLabel(name, color)
@@ -449,7 +450,6 @@ export class Avatar {
       this.deathAction.timeScale = 1.4
       this.deathAction.fadeIn(0.05).play()
     }
-    this.ring.visible = false
     this.hpBg.visible = this.hpFg.visible = false
     if (!withHead || !this.head) return null
     this.model.updateMatrixWorld(true)
@@ -482,7 +482,6 @@ export class Avatar {
   setColor(hex: number): void {
     if (hex === this.color) return
     this.color = hex
-    ;(this.ring.material as THREE.MeshBasicMaterial).color.setHex(hex)
     const look = LOOKS[this.character]
     const base = getAssets().chars[look.base].scene
     const srcMap = new Map<Group, THREE.Texture>()
@@ -645,4 +644,21 @@ function resolveCircleAABB(b: Body, c: AABB, r: number): void {
     if (ex < ez) b.x += Math.sign(dx || 1) * ex
     else b.z += Math.sign(dz || 1) * ez
   }
+}
+
+let blobTex: THREE.Texture | null = null
+/** Круглое мягкое пятно: тёмный центр, прозрачный край */
+function blobTexture(): THREE.Texture {
+  if (blobTex) return blobTex
+  const c = document.createElement('canvas')
+  c.width = c.height = 64
+  const g = c.getContext('2d')!
+  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 31)
+  gr.addColorStop(0, 'rgba(255,255,255,1)')
+  gr.addColorStop(0.45, 'rgba(255,255,255,0.75)')
+  gr.addColorStop(1, 'rgba(255,255,255,0)')
+  g.fillStyle = gr
+  g.fillRect(0, 0, 64, 64)
+  blobTex = new THREE.CanvasTexture(c)
+  return blobTex
 }

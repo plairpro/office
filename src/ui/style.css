@@ -246,6 +246,11 @@ html, body {
   background: radial-gradient(ellipse at center, rgba(211, 18, 42, 0) 45%, rgba(211, 18, 42, 0.55) 100%);
 }
 
+#heal-flash {
+  position: fixed; inset: 0; pointer-events: none; z-index: 4; opacity: 0;
+  background: radial-gradient(ellipse at center, rgba(95, 210, 160, 0) 50%, rgba(95, 210, 160, 0.5) 100%);
+}
+
 #death {
   position: absolute; left: 50%; top: 30%; transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
@@ -275,4 +280,11 @@ html, body {
   .me-panel { min-width: 170px; bottom: 10px; }
   #death b { font-size: 44px; }
   .win-card b { font-size: 32px; }
+}
+
+.fps .mute { font-size: 15px; background: var(--field); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; cursor: pointer; }
+
+@media (max-width: 600px) {
+  .fps { top: calc(max(12px, env(safe-area-inset-top)) + 54px); bottom: auto; right: 12px; }
+  #feed { top: calc(max(12px, env(safe-area-inset-top)) + 100px); }
 }

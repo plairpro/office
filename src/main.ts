@@ -4,8 +4,9 @@ import { buildOffice } from './scene/office'
 import { Renderer, autoQuality, type Quality } from './scene/render'
 import { Avatar } from './game/avatar'
 import { Match, type MatchHooks } from './game/match'
+import { sfx } from './game/sfx'
 import { Input } from './game/input'
-import { NetRoom, makeRoomCode, readRoomCode } from './net/room'
+import { NetRoom, makeRoomCode, readRoomCode, iceServers } from './net/room'
 import { $, showToast, loadName, saveName, loadPref, savePref } from './ui/dom'
 import { loadAssets } from './assets'
 
@@ -23,6 +24,8 @@ await loadAssets((p) => { mainBtn.textContent = `Загружаем офис… 
 mainBtn.textContent = mainLabel
 mainBtn.disabled = soloBtn.disabled = false
 
+// ICE-серверы считаем заранее, пока игрок в меню
+const ice = iceServers()
 const office = buildOffice()
 const camera = new THREE.PerspectiveCamera(GAME.camera.fov, 1, 0.5, 120)
 const gfx = new Renderer(host, camera, office.sunDir)
@@ -49,6 +52,13 @@ window.addEventListener('resize', resize)
 const savedQ = new URLSearchParams(location.search).get('q') ?? loadPref('quality')
 gfx.setQuality(savedQ === 'low' || savedQ === 'medium' || savedQ === 'high' ? savedQ : autoQuality())
 resize()
+
+// звук включается после первого касания/клавиши — так требуют браузеры
+for (const ev of ['pointerdown', 'keydown'] as const) window.addEventListener(ev, () => sfx.unlock(), { capture: true })
+const muteBtn = $('btn-mute') as HTMLButtonElement
+const setMute = (m: boolean) => { sfx.setMuted(m); muteBtn.textContent = m ? '🔇' : '🔊'; savePref('mute', m ? '1' : '0') }
+setMute(loadPref('mute') === '1')
+muteBtn.addEventListener('click', () => { setMute(!sfx.muted); muteBtn.blur() })
 
 const goreSelect = $('gore') as HTMLSelectElement
 goreSelect.value = loadPref('gore') === 'off' ? 'off' : 'on'
@@ -80,6 +90,7 @@ const hex = (c: number) => '#' + c.toString(16).padStart(6, '0')
 // тряска камеры и красная виньетка
 let shake = 0
 let vignette = 0
+let healFlash = 0
 let deathBy = ''
 
 const hooks: MatchHooks = {
@@ -113,7 +124,10 @@ const hooks: MatchHooks = {
     $('win').hidden = false
   },
   onRoundReset() { $('win').hidden = true; renderScore() },
-  onPickup() { renderHud(true) },
+  onPickup(kind) {
+    renderHud(true)
+    if (kind === 'coffee') healFlash = 1
+  },
 }
 
 function rosterChanged(): void {
@@ -143,9 +157,15 @@ function renderScore(): void {
     ul.appendChild(li)
   }
   const free = GAME.maxPlayers - list.length
+  let netLine = ''
+  if (net) {
+    const r = net.relaysOnline()
+    // пока никого нет — показываем, на связи ли серверы поиска: так понятно, где ломается
+    netLine = list.length > 1 ? '' : r.open === 0 ? ' · ⚠ нет связи с серверами поиска' : ` · поиск: ${r.open}/${r.total} серверов`
+  }
   $('net-status').textContent = !net
     ? 'Тренировка: манекены у кулера'
-    : `До победы ${MATCH.killsToWin} · ` + (free > 0 ? `свободно мест: ${free}` : 'комната заполнена')
+    : `До победы ${MATCH.killsToWin} · ` + (free > 0 ? `свободно мест: ${free}` : 'комната заполнена') + netLine
 }
 
 let hudKey = ''
@@ -159,6 +179,7 @@ function renderHud(force = false): void {
   if (f.stun > 0) fx.push('💫 оглушение')
   if (f.disarm > 0) fx.push('💸 руки заняты')
   if (f.invuln > 0) fx.push('🛡 только из лифта')
+  if (f.buzz > 0) fx.push('☕ бодрость')
   const hp = Math.max(0, Math.round(f.hp))
   const key = `${hp}|${f.weapon}|${f.ammo}|${fx.join()}|${f.dead ? Math.ceil(f.respawnIn) : ''}`
   if (key === hudKey && !force) return
@@ -233,7 +254,7 @@ if (invitedCode) {
   $('btn-main').textContent = 'Войти в матч'
 }
 
-function startGame(code: string | null): void {
+async function startGame(code: string | null): Promise<void> {
   myName = nameInput.value.trim().slice(0, 16) || 'Стажёр'
   saveName(myName)
   setPreview(null)
@@ -258,6 +279,7 @@ function startGame(code: string | null): void {
   $('room-code').textContent = code
   $('btn-invite').hidden = false
   net = new NetRoom(code, myName, myChar, {
+    onJoinError: () => showToast('Коллега нашёлся, но сеть не пускает соединение. Пробуем через ретранслятор…', 5000),
     onPeerHello: () => rosterChanged(),
     onPeerLeave: (id) => { match?.remove(id); rosterChanged() },
     onPeerState: (id, s) => match?.onState(id, s),
@@ -266,7 +288,7 @@ function startGame(code: string | null): void {
     onDie: (id, m) => match?.onDie(id, m),
     onPick: (id, m) => match?.onPick(id, m),
     onRoomFull: () => backToMenu('В этой комнате уже 4 человека. Создай свою и позови коллег!'),
-  })
+  }, await ice)
   match = new Match(scene, office, hooks, net)
   match.fx.gore = gore
   // точка появления — по порядку входа; пока никого не видно, считаем себя первым
@@ -302,8 +324,8 @@ function backToMenu(error?: string): void {
   err.textContent = error ?? ''
 }
 
-$('btn-main').addEventListener('click', () => startGame(readRoomCode() ?? makeRoomCode()))
-$('btn-solo').addEventListener('click', () => startGame(null))
+$('btn-main').addEventListener('click', () => void startGame(readRoomCode() ?? makeRoomCode()))
+$('btn-solo').addEventListener('click', () => void startGame(null))
 nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-main').click() })
 
 $('btn-invite').addEventListener('click', async () => {
@@ -376,10 +398,15 @@ function frame(time: number): void {
     }
   }
 
+  if (me) sfx.setListener(me.body.x, me.body.z)
+  sfx.updateMusic(dt, true)
+
   // виньетка: вспышка при попадании + постоянная при малом здоровье
   vignette = Math.max(0, vignette - dt * 1.6)
   const low = me && !me.dead ? Math.max(0, 0.45 - me.hp / me.maxHp) * 1.2 : 0
   ;($('vignette') as HTMLElement).style.opacity = String(Math.min(1, vignette + low))
+  healFlash = Math.max(0, healFlash - dt * 1.8)
+  ;($('heal-flash') as HTMLElement).style.opacity = String(healFlash)
 
   // в меню камера ближе — крупный план персонажа
   camZoom += ((match ? ZOOM : 0.42) - camZoom) * (1 - Math.exp(-4 * dt))

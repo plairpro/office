@@ -1,0 +1,219 @@
+/**
+ * Звуки — синтез на Web Audio, без единого файла: мягкая «лифтовая» музыка и очень мясные удары.
+ * Громкость и стерео зависят от того, где звук относительно своего игрока.
+ */
+
+export type SoundName =
+  | 'swing' | 'swingHeavy' | 'staple' | 'money'
+  | 'hitCut' | 'hitStaple' | 'hitBroom' | 'hitLamp' | 'hitMoney'
+  | 'death' | 'headBounce' | 'dodge' | 'pickup' | 'coffee' | 'respawn' | 'kill' | 'win' | 'empty'
+
+class Sfx {
+  private ctx: AudioContext | null = null
+  private master: GainNode | null = null
+  private musicGain: GainNode | null = null
+  private noiseBuf: AudioBuffer | null = null
+  private listener = { x: 0, z: 0 }
+  private musicTimer = 0
+  private musicStep = 0
+  muted = false
+
+  /** Браузер разрешает звук только после действия пользователя */
+  unlock(): void {
+    if (this.ctx) { void this.ctx.resume(); return }
+    const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    if (!AC) return
+    this.ctx = new AC()
+    this.master = this.ctx.createGain()
+    this.master.gain.value = this.muted ? 0 : 0.8
+    // лёгкий компрессор: мясо громкое, но уши целы
+    const comp = this.ctx.createDynamicsCompressor()
+    comp.threshold.value = -14
+    comp.ratio.value = 4
+    this.master.connect(comp).connect(this.ctx.destination)
+    this.musicGain = this.ctx.createGain()
+    this.musicGain.gain.value = 0.16
+    this.musicGain.connect(this.master)
+    const n = this.ctx.sampleRate
+    this.noiseBuf = this.ctx.createBuffer(1, n, n)
+    const d = this.noiseBuf.getChannelData(0)
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1
+  }
+
+  setMuted(m: boolean): void {
+    this.muted = m
+    if (this.master && this.ctx) this.master.gain.setTargetAtTime(m ? 0 : 0.8, this.ctx.currentTime, 0.05)
+  }
+
+  setListener(x: number, z: number): void { this.listener.x = x; this.listener.z = z }
+
+  /** Звук в точке мира (или «в ушах», если точка не задана) */
+  play(name: SoundName, x?: number, z?: number): void {
+    const ctx = this.ctx
+    if (!ctx || !this.master || this.muted || ctx.state !== 'running') return
+    let gain = 1, pan = 0
+    if (x !== undefined && z !== undefined) {
+      const dx = x - this.listener.x, dz = z - this.listener.z
+      const d = Math.hypot(dx, dz)
+      if (d > 28) return
+      gain = 1 / (1 + d / 7)
+      // камера смотрит с юго-востока: «вправо по экрану» = (1, 0, -1)
+      pan = Math.max(-0.8, Math.min(0.8, ((dx - dz) * Math.SQRT1_2) / 9))
+    }
+    const out = ctx.createGain()
+    out.gain.value = gain
+    const p = ctx.createStereoPanner()
+    p.pan.value = pan
+    out.connect(p).connect(this.master)
+    const t = ctx.currentTime + 0.005
+    const r = (a: number, b: number) => a + Math.random() * (b - a)
+    switch (name) {
+      case 'swing': this.whoosh(out, t, 0.16, r(900, 1300), 0.35); break
+      case 'swingHeavy': this.whoosh(out, t, 0.32, r(400, 600), 0.5); break
+      case 'staple':
+        this.noise(out, t, 0.03, 'highpass', 3000, 0.5)
+        this.tone(out, t, 0.04, 'square', r(1700, 1900), 900, 0.12)
+        this.tone(out, t + 0.02, 0.05, 'triangle', 220, 120, 0.25)
+        break
+      case 'money':
+        for (let i = 0; i < 6; i++) this.noise(out, t + i * 0.025, 0.03, 'bandpass', r(2500, 4000), 0.25)
+        this.tone(out, t, 0.08, 'triangle', 180, 90, 0.35)
+        break
+      case 'hitCut': this.squelch(out, t, 1); this.noise(out, t, 0.05, 'highpass', 4000, 0.2); break
+      case 'hitStaple': this.squelch(out, t, 0.6); this.tone(out, t, 0.03, 'square', 2400, 2000, 0.06); break
+      case 'hitBroom': this.thud(out, t, 0.7, 140); this.noise(out, t, 0.12, 'bandpass', 2200, 0.3); break
+      case 'hitLamp':
+        this.thud(out, t, 1.3, 90)
+        this.squelch(out, t + 0.01, 1.2)
+        for (let i = 0; i < 4; i++) this.tone(out, t + 0.02 + i * 0.03, 0.25, 'sine', r(2600, 4200), r(2500, 4000), 0.06)
+        break
+      case 'hitMoney': this.squelch(out, t, 0.4); this.noise(out, t, 0.08, 'bandpass', 3000, 0.25); break
+      case 'death':
+        this.squelch(out, t, 1.6)
+        this.squelch(out, t + 0.07, 1.2)
+        this.thud(out, t + 0.05, 1.1, 70)
+        this.tone(out, t + 0.02, 0.09, 'sine', 900, 300, 0.25) // «чпок» — голова
+        this.gurgle(out, t + 0.12, 1.3)
+        break
+      case 'headBounce': this.thud(out, t, 0.35, 180); break
+      case 'dodge': this.whoosh(out, t, 0.22, 2000, 0.3); break
+      case 'empty': this.tone(out, t, 0.04, 'square', 300, 250, 0.1); break
+      case 'pickup':
+        this.tone(out, t, 0.08, 'triangle', 660, 660, 0.25)
+        this.tone(out, t + 0.07, 0.14, 'triangle', 990, 990, 0.25)
+        break
+      case 'coffee':
+        this.slurp(out, t)
+        this.tone(out, t + 0.28, 0.12, 'sine', 784, 784, 0.25)
+        this.tone(out, t + 0.36, 0.2, 'sine', 1175, 1175, 0.25)
+        break
+      case 'respawn': // «дзынь» лифта
+        this.bell(out, t, 1319, 0.35)
+        this.bell(out, t + 0.22, 1047, 0.35)
+        break
+      case 'kill': // касса: премия за убийство
+        this.noise(out, t, 0.05, 'bandpass', 1800, 0.4)
+        this.bell(out, t + 0.06, 2093, 0.3)
+        this.bell(out, t + 0.06, 2637, 0.2)
+        break
+      case 'win':
+        [523, 659, 784, 1047, 784, 1047].forEach((f, i) => this.bell(out, t + i * 0.13, f, 0.3))
+        break
+    }
+  }
+
+  /** Мягкая лифтовая музыка: босса-нова на четырёх аккордах */
+  updateMusic(dt: number, on: boolean): void {
+    const ctx = this.ctx
+    if (!ctx || !this.musicGain || ctx.state !== 'running') return
+    this.musicGain.gain.setTargetAtTime(on && !this.muted ? 0.16 : 0, ctx.currentTime, 0.4)
+    if (!on) return
+    this.musicTimer -= dt
+    if (this.musicTimer > 0) return
+    const beat = 0.26
+    this.musicTimer += beat
+    const chords = [[57, 60, 64, 67], [62, 65, 69, 72], [55, 59, 62, 65], [60, 64, 67, 71]] // Am7 Dm7 G7 Cmaj7
+    const s = this.musicStep++
+    const ch = chords[Math.floor(s / 8) % 4]
+    const t = ctx.currentTime + 0.02
+    const hz = (m: number) => 440 * Math.pow(2, (m - 69) / 12)
+    const pattern = [1, 0, 0, 1, 0, 0, 1, 0]
+    if (s % 8 === 0) this.tone(this.musicGain, t, beat * 1.6, 'sine', hz(ch[0] - 12), hz(ch[0] - 12), 0.5) // бас
+    if (s % 8 === 4) this.tone(this.musicGain, t, beat * 1.2, 'sine', hz(ch[0] - 5), hz(ch[0] - 5), 0.35)
+    if (pattern[s % 8]) for (const m of ch.slice(1)) this.tone(this.musicGain, t, beat * 0.9, 'triangle', hz(m), hz(m), 0.09)
+    if (s % 2 === 1) this.noise(this.musicGain, t, 0.03, 'highpass', 7000, 0.12) // шейкер
+  }
+
+  // ---------- кирпичики ----------
+
+  private tone(out: AudioNode, t: number, dur: number, type: OscillatorType, f0: number, f1: number, vol: number): void {
+    const ctx = this.ctx!
+    const o = ctx.createOscillator()
+    o.type = type
+    o.frequency.setValueAtTime(f0, t)
+    o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur)
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0.0001, t)
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.008)
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+    o.connect(g).connect(out)
+    o.start(t)
+    o.stop(t + dur + 0.02)
+  }
+
+  private noise(out: AudioNode, t: number, dur: number, type: BiquadFilterType, freq: number, vol: number, freqEnd?: number, q = 1): void {
+    const ctx = this.ctx!
+    const src = ctx.createBufferSource()
+    src.buffer = this.noiseBuf
+    const f = ctx.createBiquadFilter()
+    f.type = type
+    f.Q.value = q
+    f.frequency.setValueAtTime(freq, t)
+    if (freqEnd) f.frequency.exponentialRampToValueAtTime(freqEnd, t + dur)
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0.0001, t)
+    g.gain.exponentialRampToValueAtTime(vol, t + Math.min(0.01, dur / 3))
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+    src.connect(f).connect(g).connect(out)
+    src.start(t, Math.random() * 0.5)
+    src.stop(t + dur + 0.02)
+  }
+
+  private whoosh(out: AudioNode, t: number, dur: number, freq: number, vol: number): void {
+    this.noise(out, t, dur, 'bandpass', freq * 0.6, vol, freq * 1.8, 1.5)
+  }
+
+  private thud(out: AudioNode, t: number, vol: number, f: number): void {
+    this.tone(out, t, 0.18, 'sine', f * 1.8, f * 0.5, 0.6 * vol)
+    this.noise(out, t, 0.06, 'lowpass', 600, 0.4 * vol)
+  }
+
+  /** Мокрый удар: низкий шлепок + «хлюп» с бегущим фильтром */
+  private squelch(out: AudioNode, t: number, vol: number): void {
+    this.noise(out, t, 0.14, 'lowpass', 2200, 0.55 * vol, 260, 4)
+    this.noise(out, t + 0.02, 0.1, 'bandpass', 700, 0.35 * vol, 1500, 6)
+    this.tone(out, t, 0.1, 'sine', 160, 60, 0.45 * vol)
+  }
+
+  /** Бульканье: несколько коротких «пузырей» — для фонтана из шеи */
+  private gurgle(out: AudioNode, t: number, dur: number): void {
+    for (let i = 0; i < 12; i++) {
+      const tt = t + (i / 12) * dur + Math.random() * 0.05
+      const f = 300 + Math.random() * 500
+      this.tone(out, tt, 0.06, 'sine', f, f * 1.8, 0.12 * (1 - i / 14))
+    }
+    this.noise(out, t, dur, 'lowpass', 900, 0.18, 200, 3)
+  }
+
+  private slurp(out: AudioNode, t: number): void {
+    this.noise(out, t, 0.25, 'bandpass', 800, 0.35, 2500, 5)
+    this.noise(out, t + 0.12, 0.12, 'bandpass', 1200, 0.25, 600, 5)
+  }
+
+  private bell(out: AudioNode, t: number, f: number, vol: number): void {
+    this.tone(out, t, 0.9, 'sine', f, f, vol)
+    this.tone(out, t, 0.5, 'sine', f * 2.76, f * 2.76, vol * 0.25)
+  }
+}
+
+export const sfx = new Sfx()
