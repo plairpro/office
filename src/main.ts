@@ -130,7 +130,7 @@ function renderRoster(): void {
 
 // ---------- меню ----------
 
-const PREVIEW = { x: 0, z: 2.6 }
+const PREVIEW = { x: 2.2, z: -0.6 }
 let preview: Avatar | null = null
 let myChar: CharacterId = (CHARACTER_ORDER as string[]).includes(loadPref('character') ?? '')
   ? (loadPref('character') as CharacterId)
