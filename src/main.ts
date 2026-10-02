@@ -91,6 +91,7 @@ const hex = (c: number) => '#' + c.toString(16).padStart(6, '0')
 let shake = 0
 let vignette = 0
 let healFlash = 0
+let spawnedAt = 0
 let deathBy = ''
 
 const hooks: MatchHooks = {
@@ -133,11 +134,17 @@ const hooks: MatchHooks = {
 function rosterChanged(): void {
   if (!net || !match) return
   if (net.peers.size > 0) { match.removeDummies(); $('invite-card').hidden = true }
-  net.ordered().forEach((p, rank) => {
-    const color = PLAYER_COLORS[rank % PLAYER_COLORS.length]
-    if (match!.fighters.has(p.id)) match!.restyle(p.id, p.name, color)
-    else match!.addRemote(p.id, p.name, p.character, color, rank)
-  })
+  // цвет и лифт — по номеру лифта игрока (1-й зашедший — лифт 1, 2-й — лифт 2…)
+  for (const p of net.ordered()) {
+    if (p.slot < 0) continue // ещё выбирает лифт — покажем, как только выберет
+    const color = PLAYER_COLORS[p.slot % PLAYER_COLORS.length]
+    if (match.fighters.has(p.id)) match.restyle(p.id, p.name, color)
+    else if (p.id !== net.selfId) {
+      match.addRemote(p.id, p.name, p.character, color, p.slot)
+      showToast(`${p.name} зашёл в офис`, 2500)
+      sfx.play('respawn')
+    }
+  }
   renderScore()
 }
 
@@ -346,7 +353,19 @@ async function startGame(code: string | null): Promise<void> {
   net = new NetRoom(code, myName, myChar, {
     onLink: () => renderScore(),
     onPeerHello: () => rosterChanged(),
-    onPeerLeave: (id) => { match?.remove(id); rosterChanged() },
+    onPeerLeave: (id) => {
+      const f = match?.fighters.get(id)
+      if (f) showToast(`${f.name} ушёл из офиса`, 2500)
+      match?.remove(id)
+      rosterChanged()
+    },
+    onSlotChange: (slot) => {
+      if (!match?.local) return
+      match.restyle(match.local.id, match.local.name, PLAYER_COLORS[slot])
+      // только что появились — переходим к своему лифту
+      if (performance.now() - spawnedAt < 5000) match.moveLocalToSpawn(slot)
+      rosterChanged()
+    },
     onPeerState: (id, s) => match?.onState(id, s),
     onAtk: (id, m) => match?.onAtk(id, m),
     onHurt: (id, m) => match?.onHurt(id, m),
@@ -360,18 +379,22 @@ async function startGame(code: string | null): Promise<void> {
   $('ic-link').textContent = inviteUrl(code)
   $('invite-card').hidden = false
   match.fx.gore = gore
-  // точка появления — по порядку входа; пока никого не видно, считаем себя первым
-  match.addLocal(net.selfId, myName, myChar, PLAYER_COLORS[0], 0)
-  match.addDummies() // пока коллеги не пришли — манекены у кулера
+  // сначала слушаем комнату: кто уже здесь и какие лифты заняты — потом выходим из своего
+  $('invite-card').hidden = true
+  showToast('Входим в офис…', 1800)
+  const room = net
+  await new Promise((r) => setTimeout(r, 1800))
+  if (net !== room || !match) return // успели выйти в меню
+  const slot = room.claimSlot()
+  if (slot < 0) { backToMenu('В этой комнате уже 4 человека. Создай свою и позови коллег!'); return }
+  match.addLocal(room.selfId, myName, myChar, PLAYER_COLORS[slot], slot)
+  spawnedAt = performance.now()
+  if (room.peers.size === 0) {
+    match.addDummies() // пока коллеги не пришли — манекены у кулера
+    $('invite-card').hidden = false
+  }
   camTarget.set(match.local!.body.x, 0, match.local!.body.z)
-  setTimeout(() => {
-    if (!net || !match?.local) return
-    const slot = net.rankOf(net.selfId)
-    const sp0 = office.spawns[0]
-    // переставляем, только если ещё стоим у стартового лифта
-    if (slot > 0 && Math.hypot(match.local.body.x - sp0.x, match.local.body.z - sp0.z) < 2) match.moveLocalToSpawn(slot)
-    rosterChanged()
-  }, 1500)
+  rosterChanged()
   renderScore()
   renderHud(true)
 }
@@ -533,3 +556,4 @@ function frame(time: number): void {
 window.addEventListener('beforeunload', () => net?.leave())
 requestAnimationFrame(frame)
 ;(window as unknown as { __match: () => Match | null }).__match = () => match
+;(window as unknown as { __net: () => NetRoom | null }).__net = () => net

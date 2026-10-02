@@ -139,15 +139,17 @@ export function buildOffice(): Office {
     elevator(b, W, eZ, -Math.PI / 2), // E
     elevator(b, -W, wZ, Math.PI / 2), // W
   ]
+  // номер над каждым лифтом — только цифра, на табло
+  spawns.forEach((sp, i) => {
+    const dx = Math.sin(sp.rot), dz = Math.cos(sp.rot)
+    const fx = sp.x - dx * 1.6, fz = sp.z - dz * 1.6
+    sign(p, String(i + 1), fx + dx * 0.13, 2.55, fz + dz * 0.13, sp.rot, 0.34, MV.indigoDeep)
+  })
   // карманы респа: стена перед лифтом, выходы по бокам
   wallLine(b, 'x', -D + 4.2, nX - 1.5, nX + 1.5, MV.lilac, 2.2)
   wallLine(b, 'x', D - 4.2, sX - 1.5, sX + 1.5, MV.lilac, 2.2)
   wallLine(b, 'z', W - 4.2, eZ - 1.5, eZ + 1.5, MV.lilac, 2.2)
   wallLine(b, 'z', -W + 4.2, wZ - 1.5, wZ + 1.5, MV.lilac, 2.2)
-  sign(p, 'Лифт 1', nX, 1.9, -D + 4.12, Math.PI, 1.1, MV.indigo)
-  sign(p, 'Лифт 2', sX, 1.9, D - 4.12, 0, 1.1, MV.indigo)
-  sign(p, 'Лифт 3', W - 4.12, 1.9, eZ, Math.PI / 2, 1.1, MV.indigo)
-  sign(p, 'Лифт 4', -W + 4.12, 1.9, wZ, -Math.PI / 2, 1.1, MV.indigo)
 
   // ---------- СЗ: переговорка «Лондон» ----------
   glassWall(b, 'z', -10.4, -D + 0.2, -8.6, [])
@@ -159,7 +161,6 @@ export function buildOffice(): Office {
   }
   b.rbox(0.06, 1, 1.8, 0.03, -W + 0.25, 1, -10.9, 'plastic', MV.indigo)
   b.box(0.02, 0.9, 1.7, -W + 0.3, 1.05, -10.9, 'screen')
-  sign(p, 'Лондон', -12.3, 2.35, -8.55, 0, 1.3, MV.indigo)
 
   // ---------- СВ: кабинет Босса ----------
   glassWall(b, 'z', 10.4, -D + 0.2, -8.8, [[-10.2, -8.8]])
@@ -170,7 +171,6 @@ export function buildOffice(): Office {
   p.put('furniture', 'chair_A', 12.6, -9.9, Math.PI, { collide: false })
   p.put('furniture', 'shelf_B_large_decorated', W - 0.2, -10.8, -Math.PI / 2, { y: 1.2 })
   globe(b, 11, -12.3)
-  sign(p, 'Генеральный директор', 12, 2.35, -8.75, 0, 2.0, MV.indigo)
 
   // ---------- рабочая зона «Север»: столы, между ними высокие перегородки ----------
   for (const x of [-2.6, 1.8, 6.2]) desk(b, p, x, -11.4, 0)
@@ -182,7 +182,7 @@ export function buildOffice(): Office {
   impossibleStairs(b, -W + 0.25, -2.4)
 
   // ---------- ЮЗ: туалеты ----------
-  restrooms(b, p, -W + 0.2, -9.4, 8.9, D - 0.2)
+  restrooms(b, -W + 0.2, -9.4, 8.9, D - 0.2)
 
   // ---------- ЮВ: кухня ----------
   kitchenZone(b, p, 10.4, 8.6)
@@ -193,7 +193,6 @@ export function buildOffice(): Office {
   wallLine(b, 'x', 4.4, 10.2, W - 0.2, MV.lavender, 2.4)
   b.rbox(4, 0.015, 6.4, 0.2, 12.3, 0, 1.2, 'matte', 0xd9d4ec)
   for (const z of [-1.1, 0.1, 2.5, 3.7]) rack(b, 13.6, z)
-  sign(p, 'Серверная', 10.12, 2.0, 1.3, -Math.PI / 2, 1.5, MV.indigo)
 
   // ---------- центр: «коробка» вокруг кулера ----------
   const cooler = centerArena(b, p)
@@ -310,18 +309,17 @@ function kitchenZone(b: StaticBuilder, p: Placer, x0: number, z0: number): void 
   p.put('kitchen', 'kitchencounter_straight_A_decorated', W - 0.75, z0 + 2.64, -Math.PI / 2)
   p.put('kitchen', 'fridge_A_decorated', W - 0.9, z0 + 4.0, -Math.PI / 2)
   p.put('kitchen', 'table_round_A_decorated', x0 + 2.2, z0 + 2.4, 0, { scale: 0.85 })
-  sign(p, 'Кухня', x0 + 3.6, 1.6, z0 - 0.09, Math.PI, 1.2, MV.tealDeep)
 }
 
-/** Туалеты М и Ж: перегородки, кабинки, раковины, таблички */
-function restrooms(b: StaticBuilder, p: Placer, x0: number, x1: number, z0: number, z1: number): void {
+/** Туалеты: перегородки, кабинки, раковины */
+function restrooms(b: StaticBuilder, x0: number, x1: number, z0: number, z1: number): void {
   const mid = (x0 + x1) / 2
   wallLine(b, 'z', x1, z0, z1, MV.lilac, 2.4)
   const half = (x1 - x0) / 2
   wallLine(b, 'x', z0, x0, x1, MV.lilac, 2.4, [[x0 + half / 2 - 0.55, x0 + half / 2 + 0.55], [x1 - half / 2 - 0.55, x1 - half / 2 + 0.55]])
   wallLine(b, 'z', mid, z0, z1, MV.lilac, 2.4)
   b.rbox(x1 - x0, 0.015, z1 - z0, 0.1, (x0 + x1) / 2, 0, (z0 + z1) / 2, 'matte', 0xe6f3f0)
-  for (const [ax, bx, label, col] of [[x0, mid, 'Ж', MV.coral], [mid, x1, 'М', MV.teal]] as const) {
+  for (const [ax, bx] of [[x0, mid], [mid, x1]] as const) {
     const cx = (ax + bx) / 2
     const stalls = Math.max(1, Math.floor((bx - ax - 0.2) / 1.2))
     for (let k = 0; k < stalls; k++) {
@@ -331,7 +329,6 @@ function restrooms(b: StaticBuilder, p: Placer, x0: number, x1: number, z0: numb
     }
     b.rbox(1.2, 0.85, 0.45, 0.05, cx, 0, z0 + 2.1, 'paint', MV.creamLight, { collide: true })
     b.cylinder(0.16, 0.12, 0.08, cx, 0.85, z0 + 2.1, 'plastic', MV.white)
-    sign(p, label, cx, 1.95, z0 - 0.06, Math.PI, 0.5, col)
   }
 }
 

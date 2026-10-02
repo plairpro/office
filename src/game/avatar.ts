@@ -430,11 +430,12 @@ export class Avatar {
     // мягкая тень под ногами: солнце в офисе закрыто потолком, поэтому контактная тень рисуется отдельно
     const r = CHARACTERS[character].radius
     this.ring = new THREE.Mesh(
-      new THREE.PlaneGeometry(r * 3.2, r * 3.2),
-      new THREE.MeshBasicMaterial({ map: blobTexture(), color: 0x3d3557, transparent: true, opacity: 0.42, depthWrite: false }),
+      new THREE.PlaneGeometry(r * 4, r * 3.4),
+      new THREE.MeshBasicMaterial({ map: blobTexture(), color: 0x2f2d55, transparent: true, opacity: 0.6, depthWrite: false, toneMapped: false }),
     )
     this.ring.rotation.x = -Math.PI / 2
-    this.ring.position.y = 0.02
+    // чуть сдвинута от солнца — читается как настоящая тень
+    this.ring.position.set(0.12, 0.03, 0.16)
     this.ring.renderOrder = 2
     this.root.add(this.ring)
 

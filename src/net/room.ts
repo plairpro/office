@@ -23,6 +23,7 @@ export type Hello = {
   name: string
   joinedAt: number
   character: CharacterId
+  slot: number // номер лифта 0..3, -1 — ещё не выбрал
 }
 
 export interface PeerInfo {
@@ -30,6 +31,7 @@ export interface PeerInfo {
   name: string
   joinedAt: number
   character: CharacterId
+  slot: number
 }
 
 export interface NetEvents {
@@ -43,6 +45,8 @@ export interface NetEvents {
   onPick(id: string, m: PickMsg): void
   /** изменилось число серверов на связи */
   onLink?(): void
+  /** мой лифт пришлось сменить (двое зашли одновременно) */
+  onSlotChange?(slot: number): void
 }
 
 /**
@@ -77,6 +81,7 @@ export class NetRoom {
   private timer = 0
   private left = false
   private topic: string
+  mySlot = -1
   readonly atk: (m: AtkMsg) => void
   readonly hurt: (m: HurtMsg) => void
   readonly die: (m: DieMsg) => void
@@ -123,7 +128,7 @@ export class NetRoom {
   }
 
   private hello(to?: string): void {
-    this.send('hello', { name: this.myName, joinedAt: this.joinedAt, character: this.myCharacter } satisfies Hello, to)
+    this.send('hello', { name: this.myName, joinedAt: this.joinedAt, character: this.myCharacter, slot: this.mySlot } satisfies Hello, to)
   }
 
   private send(k: string, d: unknown, to?: string): void {
@@ -139,7 +144,12 @@ export class NetRoom {
     try { env = JSON.parse(new TextDecoder().decode(buf)) } catch { return }
     if (!env || typeof env.f !== 'string' || env.f === selfId || typeof env.k !== 'string') return
     if (env.to && env.to !== selfId) return
-    if (env.k === 'bye') { this.drop(env.f); return }
+    if (env.k === 'bye') {
+      // «прощание» от брокера (s = -1) приходит и при коротком обрыве с одним из брокеров —
+      // если игрок только что был слышен через другой, не выкидываем его
+      if (env.s >= 0 || Date.now() - (this.lastHeard.get(env.f) ?? 0) > 3000) this.drop(env.f)
+      return
+    }
     // одно и то же сообщение приходит от каждого брокера — пропускаем повторы
     let set = this.seenSets.get(env.f)
     if (!set) { set = new Set(); this.seenSets.set(env.f, set) }
@@ -152,20 +162,28 @@ export class NetRoom {
     const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v)
     switch (env.k) {
       case 'hello': {
-        const isNew = !this.peers.has(id)
+        const prev = this.peers.get(id)
         const ch = String(d?.character)
+        const slot = Number(d?.slot)
         const info: PeerInfo = {
           id,
           name: String(d?.name ?? '').slice(0, 16) || 'Коллега',
           joinedAt: Number(d?.joinedAt) || Date.now(),
           character: ch in CHARACTERS ? (ch as CharacterId) : 'courier',
+          slot: Number.isInteger(slot) && slot >= 0 && slot < GAME.maxPlayers ? slot : -1,
         }
         this.peers.set(id, info)
-        if (isNew) {
-          this.hello(id) // новичку сразу отвечаем, не дожидаясь таймера
-          this.ev.onPeerHello(info)
-          if (this.rankOf(this.selfId) >= GAME.maxPlayers) { this.leave(); this.ev.onRoomFull() }
+        if (!prev) this.hello(id) // новичку сразу отвечаем, не дожидаясь таймера
+        // двое заняли один лифт — уступает тот, кто зашёл позже
+        if (info.slot >= 0 && info.slot === this.mySlot &&
+          (info.joinedAt < this.joinedAt || (info.joinedAt === this.joinedAt && id < selfId))) {
+          const free = this.freeSlot()
+          if (free < 0) { this.leave(); this.ev.onRoomFull(); return }
+          this.mySlot = free
+          this.hello()
+          this.ev.onSlotChange?.(free)
         }
+        if (!prev || prev.slot !== info.slot || prev.name !== info.name) this.ev.onPeerHello(info)
         break
       }
       case 'st': {
@@ -194,21 +212,31 @@ export class NetRoom {
     if (this.peers.delete(id)) this.ev.onPeerLeave(id)
   }
 
-  /** Все участники по порядку входа: от этого зависят цвет и точка появления */
+  /** Свободный лифт с наименьшим номером, -1 — мест нет */
+  private freeSlot(): number {
+    const used = new Set([...this.peers.values()].map((p) => p.slot))
+    for (let i = 0; i < GAME.maxPlayers; i++) if (!used.has(i)) return i
+    return -1
+  }
+
+  /** Занять лифт: первый пришедший — лифт 1, второй — 2 и так далее */
+  claimSlot(): number {
+    this.mySlot = this.freeSlot()
+    if (this.mySlot >= 0) this.hello()
+    return this.mySlot
+  }
+
+  /** Все участники по номеру лифта */
   ordered(): PeerInfo[] {
     return [
-      { id: this.selfId, name: this.myName, joinedAt: this.joinedAt, character: this.myCharacter },
+      { id: this.selfId, name: this.myName, joinedAt: this.joinedAt, character: this.myCharacter, slot: this.mySlot },
       ...this.peers.values(),
-    ].sort((a, b) => a.joinedAt - b.joinedAt || (a.id < b.id ? -1 : 1))
+    ].sort((a, b) => a.slot - b.slot || a.joinedAt - b.joinedAt)
   }
 
   /** Сколько серверов сейчас на связи */
   relaysOnline(): { open: number; total: number } {
     return { open: this.clients.filter((c) => c.connected).length, total: this.clients.length }
-  }
-
-  rankOf(id: string): number {
-    return this.ordered().findIndex((p) => p.id === id)
   }
 
   broadcastState(s: StatePacket): void {
