@@ -24,6 +24,7 @@ export type Hello = {
   joinedAt: number
   character: CharacterId
   slot: number // номер лифта 0..3, -1 — ещё не выбрал
+  v: string // версия игры
 }
 
 export interface PeerInfo {
@@ -32,6 +33,7 @@ export interface PeerInfo {
   joinedAt: number
   character: CharacterId
   slot: number
+  v?: string
 }
 
 export interface NetEvents {
@@ -60,7 +62,7 @@ const BROKERS = [
 ]
 
 const PREFIX = `office-rage/${GAME.net.appId}`
-const PEER_TIMEOUT = 6000 // молчит дольше — считаем, что ушёл
+const PEER_TIMEOUT = 10000 // молчит дольше — считаем, что ушёл
 
 type Envelope = { f: string; s: number; k: string; d: unknown; to?: string }
 
@@ -82,6 +84,8 @@ export class NetRoom {
   private left = false
   private topic: string
   mySlot = -1
+  /** диагностика: что приходит с каждого брокера, обрывы, почему кого-то потеряли */
+  readonly stats = { rx: [0, 0], tx: 0, closes: [0, 0], drops: [] as string[] }
   readonly atk: (m: AtkMsg) => void
   readonly hurt: (m: HurtMsg) => void
   readonly die: (m: DieMsg) => void
@@ -99,7 +103,7 @@ export class NetRoom {
     this.die = (m) => this.send('die', m)
     this.pick = (m) => this.send('pick', m)
 
-    for (const url of BROKERS) {
+    BROKERS.forEach((url, bi) => {
       const c = mqtt.connect(url, {
         clientId: `or_${selfId}_${Math.random().toString(36).slice(2, 6)}`,
         clean: true,
@@ -114,21 +118,21 @@ export class NetRoom {
         this.hello()
         ev.onLink?.()
       })
-      c.on('close', () => ev.onLink?.())
+      c.on('close', () => { this.stats.closes[bi]++; ev.onLink?.() })
       c.on('error', (e) => console.warn('[net]', url, e.message))
-      c.on('message', (_t, buf) => this.receive(buf))
+      c.on('message', (_t, buf) => { this.stats.rx[bi]++; this.receive(buf) })
       this.clients.push(c)
-    }
+    })
     // раз в 2 секунды — «я тут»: так находим друг друга и замечаем ушедших
     this.timer = window.setInterval(() => {
       this.hello()
       const now = Date.now()
-      for (const [id, t] of this.lastHeard) if (now - t > PEER_TIMEOUT) this.drop(id)
+      for (const [id, t] of this.lastHeard) if (now - t > PEER_TIMEOUT) this.drop(id, `тишина ${now - t} мс`)
     }, 2000)
   }
 
   private hello(to?: string): void {
-    this.send('hello', { name: this.myName, joinedAt: this.joinedAt, character: this.myCharacter, slot: this.mySlot } satisfies Hello, to)
+    this.send('hello', { name: this.myName, joinedAt: this.joinedAt, character: this.myCharacter, slot: this.mySlot, v: __BUILD__ } satisfies Hello, to)
   }
 
   private send(k: string, d: unknown, to?: string): void {
@@ -137,6 +141,7 @@ export class NetRoom {
     if (to) env.to = to
     const payload = JSON.stringify(env)
     for (const c of this.clients) if (c.connected) c.publish(this.topic, payload, { qos: 0 })
+    this.stats.tx++
   }
 
   private receive(buf: Uint8Array): void {
@@ -147,7 +152,7 @@ export class NetRoom {
     if (env.k === 'bye') {
       // «прощание» от брокера (s = -1) приходит и при коротком обрыве с одним из брокеров —
       // если игрок только что был слышен через другой, не выкидываем его
-      if (env.s >= 0 || Date.now() - (this.lastHeard.get(env.f) ?? 0) > 3000) this.drop(env.f)
+      if (env.s >= 0 || Date.now() - (this.lastHeard.get(env.f) ?? 0) > 3000) this.drop(env.f, env.s >= 0 ? 'вышел' : 'брокер: обрыв')
       return
     }
     // одно и то же сообщение приходит от каждого брокера — пропускаем повторы
@@ -171,6 +176,7 @@ export class NetRoom {
           joinedAt: Number(d?.joinedAt) || Date.now(),
           character: ch in CHARACTERS ? (ch as CharacterId) : 'courier',
           slot: Number.isInteger(slot) && slot >= 0 && slot < GAME.maxPlayers ? slot : -1,
+          v: String(d?.v ?? 'старая'),
         }
         this.peers.set(id, info)
         if (!prev) this.hello(id) // новичку сразу отвечаем, не дожидаясь таймера
@@ -206,7 +212,8 @@ export class NetRoom {
     }
   }
 
-  private drop(id: string): void {
+  private drop(id: string, why = ''): void {
+    if (this.peers.has(id)) this.stats.drops.push(`${new Date().toLocaleTimeString()} ${this.peers.get(id)?.name}: ${why}`)
     this.lastHeard.delete(id)
     this.seenSets.delete(id)
     if (this.peers.delete(id)) this.ev.onPeerLeave(id)

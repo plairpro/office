@@ -141,7 +141,9 @@ function rosterChanged(): void {
     if (match.fighters.has(p.id)) match.restyle(p.id, p.name, color)
     else if (p.id !== net.selfId) {
       match.addRemote(p.id, p.name, p.character, color, p.slot)
-      showToast(`${p.name} зашёл в офис`, 2500)
+      showToast(p.v && p.v !== __BUILD__
+        ? `${p.name} зашёл, но версии игры разные — обновите оба страницу`
+        : `${p.name} зашёл в офис`, p.v !== __BUILD__ ? 6000 : 2500)
       sfx.play('respawn')
     }
   }
