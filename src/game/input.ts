@@ -10,6 +10,8 @@ export class Input {
   touchMode = false
   /** правый стик атаки: куда тянешь — туда целишься; null — не целимся */
   aimStick: { x: number; y: number } | null = null
+  /** правый стик зажат — автоогонь: бьём/стреляем без остановки, пока держишь */
+  atkHeld = false
   private fireQueue: { aim: { x: number; y: number } | null } | null = null
 
   constructor(private el: HTMLElement) {
@@ -83,13 +85,15 @@ export class Input {
       cx = r.left + r.width / 2; cy = r.top + r.height / 2
       try { btn.setPointerCapture(e.pointerId) } catch { /* синтетические события */ }
       btn.classList.add('held')
+      this.atkHeld = true
       set(e)
     })
     btn.addEventListener('pointermove', (e) => { if (e.pointerId === id) set(e) })
     const end = (e: PointerEvent) => {
       if (e.pointerId !== id) return
       id = null
-      // отпустил: тянул — удар туда, просто тапнул — удар по ближайшему
+      this.atkHeld = false
+      // отпустил: если за время нажатия удар не успел случиться (короткий тап) — один удар всё же будет
       this.fireQueue = { aim: moved && this.aimStick ? { ...this.aimStick } : null }
       this.aimStick = null
       knob.style.transform = ''

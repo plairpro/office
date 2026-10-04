@@ -546,6 +546,7 @@ let sendAcc = 0
 let fpsAcc = 0, fpsFrames = 0
 let scoreAcc = 0
 let pendingFire: { angle: number | null; t: number } | null = null
+let firedThisHold = false
 let diagAcc = 0, lastRx = 0
 
 function frame(time: number): void {
@@ -561,17 +562,19 @@ function frame(time: number): void {
       ray.setFromCamera(input.mouseNdc, camera)
       if (ray.ray.intersectPlane(aimPlane, aimPoint)) aim = Math.atan2(aimPoint.x - me.body.x, aimPoint.z - me.body.z)
     }
-    // правый стик: тянешь — целишься (сектор на полу), отпустил — удар; тап — удар по ближайшему
+    // правый стик: зажал — сразу автоогонь, пока держишь; тянешь — туда, не тянешь — по ближайшему
     const fire = input.takeFire()
-    if (fire) pendingFire = { angle: fire.aim ? Input.screenToWorldAngle(fire.aim) : null, t: 0.35 }
+    if (fire && !firedThisHold) pendingFire = { angle: fire.aim ? Input.screenToWorldAngle(fire.aim) : null, t: 0.35 }
+    if (fire) firedThisHold = false
     if (input.aimStick) aim = Input.screenToWorldAngle(input.aimStick)
     else if (pendingFire && pendingFire.angle !== null) aim = pendingFire.angle
     const cdBefore = me.cooldown
     match.update(dt, {
       move: input.moveDir(), aim,
-      attack: input.attacking || !!pendingFire,
-      autoAim: !!pendingFire && pendingFire.angle === null,
+      attack: input.attacking || input.atkHeld || !!pendingFire,
+      autoAim: (input.atkHeld && !input.aimStick) || (!!pendingFire && pendingFire.angle === null),
     })
+    if (input.atkHeld && me.cooldown > cdBefore) firedThisHold = true
     if (pendingFire) {
       pendingFire.t -= dt
       // удар случился (перезарядка выросла) или ждали слишком долго — забываем
