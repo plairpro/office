@@ -675,13 +675,38 @@ export class Avatar {
     const run = this.actions.get('run')
     if (run && this.current === run) run.timeScale = 0.75 + k * 0.45
     this.tick(dt)
-    // степлер и деньгомёт всегда смотрят туда же, куда персонаж — так понятно, куда полетит
-    if (this.weaponObj && (this.weaponId === 'stapler' || this.weaponId === 'moneygun' || this.weaponId === 'lamp')) {
+    // Оружие не крутится вместе с кистью (анимации пака рассчитаны на меч и «переворачивали» лампу и швабру):
+    // оно всегда смотрит вперёд по взгляду персонажа, а удар — это наш собственный замах: назад-вправо → резко влево
+    if (this.weaponObj) {
+      let yaw = 0, pitch = 0.2
+      if (this.swing) {
+        const sw = this.swing
+        sw.t += dt
+        const { t, windup, big } = sw
+        const back = big ? -1.4 : -0.6, through = big ? 0.9 : 0.45
+        const ease = (x: number) => x * x * (3 - 2 * x)
+        if (t < windup) { const k = ease(t / windup); yaw = back * k; pitch = 0.2 - (big ? 0.7 : 0.3) * k }
+        else if (t < windup + 0.12) { const k = ease((t - windup) / 0.12); yaw = back + (through - back) * k; pitch = -0.5 + 0.9 * k }
+        else if (t < windup + 0.35) { const k = ease((t - windup - 0.12) / 0.23); yaw = through * (1 - k); pitch = 0.4 - 0.2 * k }
+        else this.swing = null
+        if (!big && t >= windup && t < windup + 0.12) pitch = 0.1 // резак — короткий тычок вперёд
+      }
       this.socket.updateWorldMatrix(true, false)
       this.socket.getWorldQuaternion(this.tmpQ).invert()
       this.model.getWorldQuaternion(this.tmpQ2)
+      const ranged = this.weaponId === 'stapler' || this.weaponId === 'moneygun'
+      if (!ranged) this.tmpQ2.multiply(this.tmpQ3.setFromEuler(this.tmpE.set(pitch, yaw, 0, 'YXZ')))
       this.weaponObj.quaternion.multiplyQuaternions(this.tmpQ, this.tmpQ2)
-    } else if (this.weaponObj) this.weaponObj.quaternion.identity()
+    }
+  }
+
+  /** Замах оружием ближнего боя: windup — сколько длится замах до удара */
+  private swing: { t: number; windup: number; big: boolean } | null = null
+  private tmpQ3 = new THREE.Quaternion()
+  private tmpE = new THREE.Euler()
+  swingWeapon(windup: number): void {
+    if (this.dead || !this.weaponId) return
+    this.swing = { t: 0, windup: Math.max(0.06, windup), big: this.weaponId !== 'cutter' }
   }
 
   dispose(): void {

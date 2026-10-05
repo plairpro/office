@@ -479,6 +479,7 @@ export class Match {
         this.projectiles.push({ mesh, x: sx, z: sz, vx: Math.sin(a) * sp, vz: Math.cos(a) * sp, left: w.range, owner: f.id, w: w.id })
       }
     } else {
+      f.avatar.swingWeapon(w.windup / asm)
       this.pending.push({ t: w.windup / asm, by: f.id, w: w.id, a: m.a, x: m.x, z: m.z })
     }
   }
