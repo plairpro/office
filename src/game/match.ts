@@ -107,7 +107,7 @@ interface Pickup { spot: PickupSpot; mesh: THREE.Group; holder: THREE.Group; rin
 
 const DEG = Math.PI / 180
 const SHOT_Y = 1.15
-const HIT_SOUND: Record<WeaponId, SoundName> = { cutter: 'hitCut', stapler: 'hitStaple', mop: 'hitBroom', lamp: 'hitLamp', moneygun: 'hitMoney' }
+const HIT_SOUND: Record<WeaponId, SoundName> = { cutter: 'hitCut', stapler: 'hitStaple', mop: 'hitBroom', lamp: 'hitLamp', moneygun: 'hitMoney', fists: 'hitBroom' }
 
 export class Match {
   readonly fighters = new Map<string, Fighter>()
@@ -236,13 +236,13 @@ export class Match {
   private makeFighter(id: string, name: string, character: CharacterId, color: number, kind: FighterKind, x: number, z: number, f: number): Fighter {
     const avatar = new Avatar(name, color, character)
     avatar.root.position.set(x, 0, z)
-    avatar.setWeapon('cutter')
+    avatar.setWeapon('fists')
     this.scene.add(avatar.root)
     const hp = CHARACTERS[character].hp
     const fighter: Fighter = {
       id, name, character, color, kind, avatar,
       body: { x, z, vx: 0, vz: 0 }, facing: f, hp, maxHp: hp,
-      weapon: 'cutter', ammo: -1, uses: -1, dead: false, kills: 0,
+      weapon: 'fists', ammo: -1, uses: -1, dead: false, kills: 0,
       target: { x, z, vx: 0, vz: 0 }, lastAt: performance.now(), flags: 0,
       cooldown: 0, respawnIn: 0, invuln: kind === 'local' ? MATCH.spawnProtect : 0,
       bleed: 0, bleedDps: 0, bleedBy: '', bleedAcc: 0, slow: 0, slowFactor: 1, stun: 0, stunCd: 0, disarm: 0, dripAcc: 0,
@@ -366,7 +366,7 @@ export class Match {
       this.startAttack(f, m)
       this.net?.atk(m)
       if (w.id === 'lamp') this.hooks.onShake(0.15)
-      if (f.ammo > 0 && --f.ammo === 0) { this.equip(f, 'cutter'); sfx.play('empty') }
+      if (f.ammo > 0 && --f.ammo === 0) { this.equip(f, 'fists'); sfx.play('empty') }
     }
 
     f.avatar.root.position.set(f.body.x, 0, f.body.z)
@@ -606,7 +606,7 @@ export class Match {
   private wear(f: Fighter | null | undefined, w: WeaponId): void {
     if (!f || f.weapon !== w || f.uses <= 0) return
     if (--f.uses > 0) return
-    this.equip(f, 'cutter')
+    this.equip(f, 'fists')
     if (f.kind === 'local') {
       this.fx.floatText(`${WEAPONS[w].name} сломалась!`, f.body.x, 2.3, f.body.z, '#d6455a')
       sfx.play('empty')
@@ -635,8 +635,8 @@ export class Match {
       else if (e.kind === 'stun') { if (v.stunCd <= 0) { v.stun = e.seconds; v.stunCd = e.seconds + 1.5 } }
       else if (e.kind === 'disarm') {
         // выбивает оружие из рук: подобранное теряется, и пару секунд нельзя бить даже ножом
-        if (v.disarm <= 0) this.fx.floatText(v.weapon !== 'cutter' ? 'Выронил оружие!' : 'Обезоружен!', v.body.x, 2.5, v.body.z, '#9d8fd0')
-        if (v.weapon !== 'cutter') this.equip(v, 'cutter')
+        if (v.disarm <= 0) this.fx.floatText(v.weapon !== 'fists' ? 'Выронил оружие!' : 'Обезоружен!', v.body.x, 2.5, v.body.z, '#9d8fd0')
+        if (v.weapon !== 'fists') this.equip(v, 'fists')
         v.disarm = e.seconds
       } else if (e.kind === 'knockback') {
         const k = e.force * (1 - ch.knockbackResist)
@@ -746,7 +746,7 @@ export class Match {
     f.invuln = MATCH.spawnProtect
     f.cooldown = 0.3
     f.bleed = f.slow = f.stun = f.disarm = f.buzz = 0
-    this.equip(f, 'cutter')
+    this.equip(f, 'fists')
     f.avatar.revive()
     sfx.play('respawn')
     this.hooks.onLocalRespawn()

@@ -706,7 +706,7 @@ export class Avatar {
   private tmpE = new THREE.Euler()
   swingWeapon(windup: number): void {
     if (this.dead || !this.weaponId) return
-    this.swing = { t: 0, windup: Math.max(0.06, windup), big: this.weaponId !== 'cutter' }
+    this.swing = { t: 0, windup: Math.max(0.06, windup), big: this.weaponId !== 'cutter' && this.weaponId !== 'fists' }
   }
 
   dispose(): void {

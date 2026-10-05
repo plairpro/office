@@ -277,6 +277,7 @@ function coffee(): THREE.Group {
 
 export function weaponMesh(id: WeaponId | 'coffee'): THREE.Group {
   switch (id) {
+    case 'fists': return new THREE.Group() // голые руки
     case 'cutter': return cutter()
     case 'stapler': return stapler()
     case 'mop': return mop()

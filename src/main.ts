@@ -88,7 +88,7 @@ const input = new Input(renderer.domElement)
 let match: Match | null = null
 let net: NetRoom | null = null
 let gore = loadPref('age') !== 'kid'
-const WEAPON_ICON: Record<WeaponId, string> = { cutter: '🔪', stapler: '📎', mop: '🧹', lamp: '💡', moneygun: '💸' }
+const WEAPON_ICON: Record<WeaponId, string> = { cutter: '🔪', stapler: '📎', mop: '🧹', lamp: '💡', moneygun: '💸', fists: '✊' }
 const hex = (c: number) => '#' + c.toString(16).padStart(6, '0')
 
 // тряска камеры и красная виньетка

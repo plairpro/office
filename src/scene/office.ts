@@ -6,7 +6,7 @@ import { MV } from './palette'
 export interface Spawn { x: number; z: number; rot: number }
 
 /** Предмет на полу: оружие или кофе (лечит) */
-export interface PickupSpot { x: number; z: number; kind: 'stapler' | 'mop' | 'lamp' | 'moneygun' | 'coffee' }
+export interface PickupSpot { x: number; z: number; kind: 'cutter' | 'stapler' | 'mop' | 'lamp' | 'moneygun' | 'coffee' }
 
 export interface Office {
   group: THREE.Group
@@ -233,6 +233,8 @@ export function buildOffice(): Office {
       { x: -1.8, z: 8.2, kind: 'moneygun' }, // юг, у теннисного стола — ближе к лифту 2
       { x: 13.2, z: -9.6, kind: 'lamp' }, // кабинет директора — ближе к лифту 3
       { x: -6.4, z: 8.4, kind: 'mop' }, // у лаунжа и туалетов — ближе к лифту 4
+      { x: 6.4, z: -8.4, kind: 'cutter' }, // резак теперь тоже подбирается
+      { x: -6.4, z: -8.4, kind: 'cutter' },
       { x: -10.4, z: -6.6, kind: 'coffee' }, // у переговорки, между лифтами 1 и 4
       { x: 10.4, z: 6.6, kind: 'coffee' }, // у кухни, между лифтами 2 и 3
     ],

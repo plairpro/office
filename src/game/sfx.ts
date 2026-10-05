@@ -176,7 +176,8 @@ class Sfx {
   updateMusic(dt: number, on: boolean, mode: 'lobby' | 'fight' = 'lobby'): void {
     const ctx = this.ctx
     if (!ctx || !this.musicGain || ctx.state !== 'running') return
-    this.musicGain.gain.setTargetAtTime(on && !this.muted ? 0.16 : 0, ctx.currentTime, 0.4)
+    // в бою громче: там много своих звуков, тихую музыку не слышно
+    this.musicGain.gain.setTargetAtTime(on && !this.muted ? (mode === 'fight' ? 0.3 : 0.16) : 0, ctx.currentTime, 0.4)
     if (!on) return
     if (mode !== this.musicMode) { this.musicMode = mode; this.musicStep = 0; this.musicTimer = 0.05 }
     this.musicTimer -= dt

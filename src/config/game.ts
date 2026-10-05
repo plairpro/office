@@ -90,7 +90,7 @@ export type Effect =
   | { kind: 'disarm'; seconds: number }
   | { kind: 'knockback'; force: number }
 
-export type WeaponId = 'cutter' | 'stapler' | 'mop' | 'lamp' | 'moneygun'
+export type WeaponId = 'cutter' | 'stapler' | 'mop' | 'lamp' | 'moneygun' | 'fists'
 
 export interface WeaponDef {
   id: WeaponId
@@ -113,16 +113,23 @@ export interface WeaponDef {
 }
 
 /** Порядок важен: индекс уходит в сеть */
-export const WEAPON_IDS: WeaponId[] = ['cutter', 'stapler', 'mop', 'lamp', 'moneygun']
+export const WEAPON_IDS: WeaponId[] = ['cutter', 'stapler', 'mop', 'lamp', 'moneygun', 'fists']
 
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
+  // всегда с собой: кулаки — почти без урона, только чтобы было чем отмахнуться до первого оружия
+  fists: {
+    id: 'fists', name: 'Кулаки', type: 'melee',
+    range: 0.45, damage: 4, cooldown: 0.4, windup: 0.06, arc: 90,
+    effects: [],
+    clip: 'SwordSlash', animSpeed: 2.6,
+  },
   // Баланс оружия: чем дальше бьёт и чем сильнее эффект — тем меньше урона в секунду и тем быстрее кончается.
-  // Урон/с (без эффектов): резак 45 · степлер 20 (+3/с кровью) · швабра 19 · деньгомёт 16 · лампа 4.
+  // Урон/с (без эффектов): кулаки 10 · резак 45 · степлер 20 (+3/с кровью) · швабра 19 · деньгомёт 16 · лампа 4.
   // Конус: чем мощнее удар, тем точнее надо целиться — резак 70°, лампа 90°, швабра размашистая 140°;
   // у стрелкового — разброс: степлер почти точный (4°), деньгомёт веером (30°, на 5 м — полоса ≈2.7 м).
 
-  // всегда с собой, бесконечный: вплотную, самый большой урон, двойной урон в спину; без эффектов —
-  // эффекты только у подобранного оружия (кровь — у степлера)
+  // подбирается с пола: вплотную, самый большой урон, двойной урон в спину; выбивается деньгомётом
+  // и теряется при смерти; без эффектов (кровь — у степлера)
   cutter: {
     id: 'cutter', name: 'Резак', type: 'melee',
     range: 0.45, damage: 18, cooldown: 0.4, windup: 0.08, arc: 70, backstabMultiplier: 2,
