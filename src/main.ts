@@ -621,7 +621,7 @@ function frame(time: number): void {
   }
 
   if (me) sfx.setListener(me.body.x, me.body.z)
-  sfx.updateMusic(dt, true)
+  sfx.updateMusic(dt, true, match ? 'fight' : 'lobby') // в лобби — спокойная, в бою — резвая
 
   // виньетка: вспышка при попадании + постоянная при малом здоровье
   vignette = Math.max(0, vignette - dt * 1.6)

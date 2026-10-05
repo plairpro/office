@@ -167,26 +167,82 @@ class Sfx {
     }
   }
 
-  /** Мягкая лифтовая музыка: босса-нова на четырёх аккордах */
-  updateMusic(dt: number, on: boolean): void {
+  private musicMode: 'lobby' | 'fight' = 'lobby'
+
+  /**
+   * Музыка. В лобби — мягкая лифтовая босса-нова, в бою — та же минималистичная «глухая» палитра
+   * (синусы, приглушённые щипки, бочка-«тук»), но вдвое резвее: ровная бочка, пульсирующий бас шестнадцатыми.
+   */
+  updateMusic(dt: number, on: boolean, mode: 'lobby' | 'fight' = 'lobby'): void {
     const ctx = this.ctx
     if (!ctx || !this.musicGain || ctx.state !== 'running') return
     this.musicGain.gain.setTargetAtTime(on && !this.muted ? 0.16 : 0, ctx.currentTime, 0.4)
     if (!on) return
+    if (mode !== this.musicMode) { this.musicMode = mode; this.musicStep = 0; this.musicTimer = 0.05 }
     this.musicTimer -= dt
     if (this.musicTimer > 0) return
+    if (mode === 'fight') this.fightStep()
+    else this.lobbyStep()
+  }
+
+  /** Лобби: босса-нова на четырёх аккордах */
+  private lobbyStep(): void {
+    const ctx = this.ctx!, out = this.musicGain!
     const beat = 0.26
     this.musicTimer += beat
     const chords = [[57, 60, 64, 67], [62, 65, 69, 72], [55, 59, 62, 65], [60, 64, 67, 71]] // Am7 Dm7 G7 Cmaj7
     const s = this.musicStep++
     const ch = chords[Math.floor(s / 8) % 4]
     const t = ctx.currentTime + 0.02
-    const hz = (m: number) => 440 * Math.pow(2, (m - 69) / 12)
     const pattern = [1, 0, 0, 1, 0, 0, 1, 0]
-    if (s % 8 === 0) this.tone(this.musicGain, t, beat * 1.6, 'sine', hz(ch[0] - 12), hz(ch[0] - 12), 0.5) // бас
-    if (s % 8 === 4) this.tone(this.musicGain, t, beat * 1.2, 'sine', hz(ch[0] - 5), hz(ch[0] - 5), 0.35)
-    if (pattern[s % 8]) for (const m of ch.slice(1)) this.tone(this.musicGain, t, beat * 0.9, 'triangle', hz(m), hz(m), 0.09)
-    if (s % 2 === 1) this.noise(this.musicGain, t, 0.03, 'highpass', 7000, 0.12) // шейкер
+    if (s % 8 === 0) this.tone(out, t, beat * 1.6, 'sine', hz(ch[0] - 12), hz(ch[0] - 12), 0.5) // бас
+    if (s % 8 === 4) this.tone(out, t, beat * 1.2, 'sine', hz(ch[0] - 5), hz(ch[0] - 5), 0.35)
+    if (pattern[s % 8]) for (const m of ch.slice(1)) this.tone(out, t, beat * 0.9, 'triangle', hz(m), hz(m), 0.09)
+    if (s % 2 === 1) this.noise(out, t, 0.03, 'highpass', 7000, 0.12) // шейкер
+  }
+
+  /** Бой: 132 удара в минуту, шестнадцатые. Am – F – C – G, всё глухое и короткое */
+  private fightStep(): void {
+    const ctx = this.ctx!, out = this.musicGain!
+    const step = 60 / 132 / 4
+    this.musicTimer += step
+    const s = this.musicStep++
+    const bar = Math.floor(s / 16) % 4
+    const i = s % 16
+    const t = ctx.currentTime + 0.02
+    const roots = [45, 41, 48, 43] // A F C G
+    const r = roots[bar]
+    // бочка-«тук» на каждую долю
+    if (i % 4 === 0) { this.tone(out, t, 0.12, 'sine', 120, 45, 0.45); this.noise(out, t, 0.02, 'lowpass', 400, 0.15) }
+    // приглушённый хлопок на 2 и 4
+    if (i === 4 || i === 12) this.noise(out, t, 0.07, 'bandpass', 1100, 0.18, 700, 1.2)
+    // бас шестнадцатыми, «отскок» на слабых
+    const bassPat = [1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1]
+    if (bassPat[i]) this.tone(out, t, step * 0.85, 'triangle', hz(r - 12 + (i % 8 === 6 ? 7 : 0)), hz(r - 12 + (i % 8 === 6 ? 7 : 0)), 0.26)
+    // приглушённый «щипок» аккорда (как через стенку)
+    const stab = [0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0]
+    if (stab[i]) {
+      const minor = bar === 0
+      for (const iv of [12, minor ? 15 : 16, 19]) this.pluck(out, t, 0.12, hz(r + iv), 0.07)
+    }
+    // короткая мелодия-ответ во второй половине каждых двух тактов
+    if ((s % 32) >= 24 && i % 2 === 0) {
+      const mel = [0, 3, 7, 3]
+      this.pluck(out, t, 0.1, hz(r + 24 + mel[((s % 32) - 24) / 2]), 0.05)
+    }
+    // тихий закрытый хэт на слабые шестнадцатые
+    if (i % 2 === 1) this.noise(out, t, 0.02, 'highpass', 6000, i % 4 === 3 ? 0.08 : 0.04)
+  }
+
+  /** Глухой щипок: треугольник через низкочастотный фильтр */
+  private pluck(out: AudioNode, t: number, dur: number, f: number, vol: number): void {
+    const ctx = this.ctx!
+    const lp = ctx.createBiquadFilter()
+    lp.type = 'lowpass'
+    lp.frequency.setValueAtTime(1400, t)
+    lp.frequency.exponentialRampToValueAtTime(500, t + dur)
+    lp.connect(out)
+    this.tone(lp, t, dur, 'triangle', f, f, vol)
   }
 
   // ---------- кирпичики ----------
@@ -260,5 +316,7 @@ class Sfx {
     this.tone(out, t, 0.5, 'sine', f * 2.76, f * 2.76, vol * 0.25)
   }
 }
+
+const hz = (m: number) => 440 * Math.pow(2, (m - 69) / 12)
 
 export const sfx = new Sfx()
