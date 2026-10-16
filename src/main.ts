@@ -60,18 +60,7 @@ $('btn-settings').addEventListener('click', () => { document.querySelector('.fps
 
 $('build').textContent = `v${__BUILD__.slice(5).replace('T', ' ')}`
 
-// возраст: младше 12 — конфетти вместо крови, старше — кровь (выбирается в меню, в игре не меняется)
-const ageRadios = document.querySelectorAll<HTMLInputElement>('input[name="age"]')
-const savedAge = loadPref('age')
-for (const r of ageRadios) {
-  r.checked = r.value === savedAge
-  r.addEventListener('change', () => {
-    if (!r.checked) return
-    gore = r.value !== 'kid'
-    if (match) match.fx.gore = gore
-    savePref('age', r.value)
-  })
-}
+// пока есть только одна версия — с конфетти вместо крови (выбор возраста убран из меню)
 
 const qSelect = $('quality') as HTMLSelectElement
 qSelect.value = gfx.getQuality()
@@ -87,7 +76,7 @@ const input = new Input(renderer.domElement)
 
 let match: Match | null = null
 let net: NetRoom | null = null
-let gore = loadPref('age') !== 'kid'
+const gore = false
 const WEAPON_ICON: Record<WeaponId, string> = { cutter: '🔪', stapler: '📎', mop: '🧹', lamp: '💡', moneygun: '💸', fists: '✊' }
 const hex = (c: number) => '#' + c.toString(16).padStart(6, '0')
 
@@ -350,16 +339,6 @@ joinCode.addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-join
 $('btn-create').addEventListener('click', () => void startGame(makeRoomCode()))
 
 async function startGame(code: string | null): Promise<void> {
-  // без выбранного возраста не пускаем: от него зависит, будет кровь или конфетти
-  if (![...ageRadios].some((r) => r.checked)) {
-    const err = $('menu-error')
-    err.textContent = 'Выбери свой возраст'
-    err.hidden = false
-    document.querySelector('.age')?.classList.add('need')
-    return
-  }
-  $('menu-error').hidden = true
-  document.querySelector('.age')?.classList.remove('need')
   myName = nameInput.value.trim().slice(0, 16) || 'Коллега'
   saveName(myName)
   setPreview(null)
