@@ -1,3 +1,4 @@
+import { tr } from '../i18n'
 // Все игровые параметры — здесь, а не в коде. Баланс правим только в этом файле.
 
 export const GAME = {
@@ -46,22 +47,22 @@ export interface CharacterDef {
 export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   // уклонист: мало здоровья, но каждый пятый удар мимо (живучесть ≈ 100)
   accountant: {
-    id: 'accountant', name: 'Бухгалтер', blurb: 'Хрупкий, но вёрткий: каждый пятый удар мимо.',
+    id: 'accountant', name: tr('Бухгалтер', 'Accountant'), blurb: tr('Хрупкий, но вёрткий: каждый пятый удар мимо.', 'Fragile but slippery: every fifth hit misses.'),
     hp: 80, moveMul: 1.05, attackSpeedMul: 1.1, dodge: 0.2, radius: 0.38, knockbackResist: 0,
   },
   // танк: больше всех здоровья, почти не отлетает, но медленный и крупный
   boss: {
-    id: 'boss', name: 'Босс', blurb: 'Самый живучий и почти не отлетает от ударов, но медленный.',
+    id: 'boss', name: tr('Босс', 'Boss'), blurb: tr('Самый живучий и почти не отлетает от ударов, но медленный.', 'Toughest of all and barely gets knocked back, but slow.'),
     hp: 130, moveMul: 0.92, attackSpeedMul: 0.85, dodge: 0, radius: 0.48, knockbackResist: 0.7,
   },
   // стеклянная пушка: бьёт быстрее всех, но здоровья меньше всех
   secretary: {
-    id: 'secretary', name: 'Секретарь', blurb: 'Печатает 300 знаков в минуту. И бьёт так же — но хрупкий.',
+    id: 'secretary', name: tr('Секретарь', 'Secretary'), blurb: tr('Печатает 300 знаков в минуту. И бьёт так же — но хрупкий.', 'Types 300 wpm. Hits just as fast — but fragile.'),
     hp: 75, moveMul: 1.0, attackSpeedMul: 1.45, dodge: 0, radius: 0.4, knockbackResist: 0,
   },
   // бегун: быстрее всех, первым добегает до оружия и кофе; в драке обычный
   courier: {
-    id: 'courier', name: 'Стажёр', blurb: 'Бегает по поручениям — быстрее всех добегает до оружия и кофе.',
+    id: 'courier', name: tr('Стажёр', 'Intern'), blurb: tr('Бегает по поручениям — быстрее всех добегает до оружия и кофе.', 'Runs errands — first to every weapon and coffee.'),
     hp: 95, moveMul: 1.15, attackSpeedMul: 1.0, dodge: 0, radius: 0.42, knockbackResist: 0,
   },
 }
@@ -118,7 +119,7 @@ export const WEAPON_IDS: WeaponId[] = ['cutter', 'stapler', 'mop', 'lamp', 'mone
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
   // всегда с собой: кулаки — почти без урона, только чтобы было чем отмахнуться до первого оружия
   fists: {
-    id: 'fists', name: 'Кулаки', type: 'melee',
+    id: 'fists', name: tr('Кулаки', 'Fists'), type: 'melee',
     range: 0.45, damage: 4, cooldown: 0.4, windup: 0.06, arc: 90,
     effects: [],
     clip: 'SwordSlash', animSpeed: 2.6,
@@ -131,21 +132,21 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   // подбирается с пола: вплотную, самый большой урон, двойной урон в спину; выбивается деньгомётом
   // и теряется при смерти; без эффектов (кровь — у степлера)
   cutter: {
-    id: 'cutter', name: 'Резак', type: 'melee',
+    id: 'cutter', name: tr('Резак', 'Box cutter'), type: 'melee',
     range: 0.45, damage: 18, cooldown: 0.4, windup: 0.08, arc: 70, backstabMultiplier: 2,
     effects: [],
     clip: 'SwordSlash', animSpeed: 2.6,
   },
   // дальний бой 10 м: скобы слабые, главное — кровотечение 6 с по 3/с (≈100 урона на магазин из 12)
   stapler: {
-    id: 'stapler', name: 'Степлер', type: 'ranged',
+    id: 'stapler', name: tr('Степлер', 'Stapler'), type: 'ranged',
     range: 10, damage: 6, cooldown: 0.3, windup: 0, spread: 4, speed: 24, ammo: 12,
     effects: [{ kind: 'bleed', seconds: 6, dps: 3 }],
     clip: 'Shoot_OneHanded', animSpeed: 1.8,
   },
   // 2 м: средний урон, широкий размах, замедляет на 3 с и отталкивает; 5 попаданий
   mop: {
-    id: 'mop', name: 'Швабра', type: 'melee',
+    id: 'mop', name: tr('Швабра', 'Mop'), type: 'melee',
     range: 2.0, damage: 14, cooldown: 0.75, windup: 0.18, arc: 140,
     effects: [{ kind: 'slow', seconds: 3, factor: 0.6 }, { kind: 'knockback', force: 9 }],
     durability: 5,
@@ -153,7 +154,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   },
   // 1 м: почти без урона, медленная, оглушает на 2 с; 3 попадания
   lamp: {
-    id: 'lamp', name: 'Настольная лампа', type: 'melee',
+    id: 'lamp', name: tr('Настольная лампа', 'Desk lamp'), type: 'melee',
     range: 1.0, damage: 5, cooldown: 1.2, windup: 0.42, arc: 90,
     effects: [{ kind: 'stun', seconds: 2 }],
     durability: 3,
@@ -161,7 +162,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   },
   // 5 м: веер купюр почти без урона — главное, выбивает оружие из рук на 2 с
   moneygun: {
-    id: 'moneygun', name: 'Деньгомёт', type: 'ranged',
+    id: 'moneygun', name: tr('Деньгомёт', 'Money gun'), type: 'ranged',
     range: 5, damage: 2, cooldown: 0.9, windup: 0, pellets: 7, spread: 30, speed: 15, ammo: 6,
     effects: [{ kind: 'disarm', seconds: 2 }],
     clip: 'Shoot_OneHanded', animSpeed: 0.9,

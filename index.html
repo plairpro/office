@@ -18,28 +18,28 @@
     <div id="heal-flash"></div>
 
     <!-- Меню -->
-    <div id="loader"><div class="lbar"><i id="lbar-fill"></i></div><span id="lbar-text">Загружаем офис…</span></div>
+    <div id="loader"><div class="lbar"><i id="lbar-fill"></i></div><span id="lbar-text" data-en="Loading the office…">Загружаем офис…</span></div>
     <div id="menu" class="overlay" style="visibility:hidden">
       <div class="card">
-        <div class="logo">Офис</div>
-        <p class="tagline" id="menu-tagline">Нажми «Войти» — появится твой офис и ссылка для коллег</p>
+        <div class="logo" data-en="Office">Офис</div>
+        <p class="tagline" id="menu-tagline" data-en="Press “Enter” — your office and a link for coworkers will appear">Нажми «Войти» — появится твой офис и ссылка для коллег</p>
         <label class="field">
-          <span>Как тебя зовут в офисе?</span>
-          <input id="name" maxlength="16" autocomplete="nickname" placeholder="Например, Бухгалтер Света" />
+          <span data-en="What’s your name at the office?">Как тебя зовут в офисе?</span>
+          <input id="name" maxlength="16" autocomplete="nickname" placeholder="Например, Бухгалтер Света" data-en-placeholder="e.g. Accountant Sarah" />
         </label>
-        <div class="field"><span>Кем будешь драться?</span></div>
+        <div class="field"><span data-en="Who will you fight as?">Кем будешь драться?</span></div>
         <div id="chars" class="chars"></div>
-        <button id="btn-main" class="btn cta">Создать офис</button>
+        <button id="btn-main" class="btn cta" data-en="Create office">Создать офис</button>
         <div id="join-row" class="join-row">
-          <input id="join-code" maxlength="6" autocomplete="off" spellcheck="false" placeholder="Код офиса" />
-          <button id="btn-join" class="btn primary">Войти</button>
+          <input id="join-code" maxlength="6" autocomplete="off" spellcheck="false" placeholder="Код офиса" data-en-placeholder="Office code" />
+          <button id="btn-join" class="btn primary" data-en="Enter">Войти</button>
         </div>
-        <button id="btn-create" class="btn ghost" hidden>Создать свой офис</button>
+        <button id="btn-create" class="btn ghost" hidden data-en="Create your own office">Создать свой офис</button>
         <p id="menu-error" class="error" hidden></p>
         <div class="controls">
-          <div class="ctl-desk"><b>WASD</b> бег · <b>мышь</b> прицел · <b>ЛКМ</b> или <b>пробел</b> удар</div>
-          <div class="ctl-touch"><b>левый палец</b> бег · <b>✊</b> держи — бьёшь без остановки по ближайшему, потяни — бьёшь туда</div>
-          <div>Подбирай оружие и кофе с пола · 10 убийств — победа</div>
+          <div class="ctl-desk" data-en="<b>WASD</b> move · <b>mouse</b> aim · <b>LMB</b> or <b>space</b> attack"><b>WASD</b> бег · <b>мышь</b> прицел · <b>ЛКМ</b> или <b>пробел</b> удар</div>
+          <div class="ctl-touch" data-en="<b>left thumb</b> move · <b>✊</b> hold — keep hitting the nearest, drag — hit that way"><b>левый палец</b> бег · <b>✊</b> держи — бьёшь без остановки по ближайшему, потяни — бьёшь туда</div>
+          <div data-en="Grab weapons and coffee off the floor · 10 kills to win">Подбирай оружие и кофе с пола · 10 убийств — победа</div>
         </div>
       </div>
     </div>
@@ -47,12 +47,12 @@
     <!-- HUD -->
     <div id="hud" hidden>
       <div class="panel room">
-        <div class="room-code">Офис <b id="room-code">—</b></div>
+        <div class="room-code"><span data-en="Office">Офис</span> <b id="room-code">—</b></div>
         <ul id="roster"></ul>
         <div id="net-status" class="status"></div>
       </div>
-      <button id="btn-invite" class="btn primary invite">📨<span class="txt"> Позвать коллег</span></button>
-      <button id="btn-settings" class="settings-btn" aria-label="Настройки">⚙︎</button>
+      <button id="btn-invite" class="btn primary invite">📨<span class="txt" data-en=" Invite coworkers"> Позвать коллег</span></button>
+      <button id="btn-settings" class="settings-btn" aria-label="Настройки" data-en-aria="Settings">⚙︎</button>
       <div class="panel me-panel">
         <div class="hp"><div id="hp-fill"></div><span id="hp-text"></span></div>
         <div class="weapon"><b id="weapon-name"></b> <span id="ammo"></span></div>
@@ -60,23 +60,23 @@
       </div>
       <ul id="feed"></ul>
       <div id="invite-card" hidden>
-        <button id="ic-close" aria-label="Скрыть">×</button>
-        <div class="ic-title">Офис <span id="ic-code"></span></div>
-        <p>Отправь приглашение коллегам — они окажутся здесь</p>
-        <div class="ic-link" id="ic-link" title="Нажми, чтобы скопировать ссылку"></div>
-        <div class="ic-btns"><button id="ic-copy" class="btn cta">Пригласить</button></div>
+        <button id="ic-close" aria-label="Скрыть" data-en-aria="Hide">×</button>
+        <div class="ic-title"><span data-en="Office">Офис</span> <span id="ic-code"></span></div>
+        <p data-en="Send the invite to coworkers — they’ll land right here">Отправь приглашение коллегам — они окажутся здесь</p>
+        <div class="ic-link" id="ic-link" title="Нажми, чтобы скопировать ссылку" data-en-title="Tap to copy the link"></div>
+        <div class="ic-btns"><button id="ic-copy" class="btn cta" data-en="Invite">Пригласить</button></div>
       </div>
-      <div id="death" hidden><b>УВОЛЕН</b><span id="death-sub"></span></div>
-      <div id="win" hidden><div class="win-card"><small>Сотрудник месяца</small><b id="win-name"></b><span id="win-sub"></span><small>Новый раунд через несколько секунд</small></div></div>
-      <div class="panel fps"><span id="build" title="Версия игры"></span><span id="netdiag" title="Связь"></span><span id="fps"></span>
-        <button id="btn-mute" class="mute" title="Звук">🔊</button>
-        <select id="quality" title="Графика">
-          <option value="low">Низкая</option>
-          <option value="medium">Средняя</option>
-          <option value="high">Высокая</option>
+      <div id="death" hidden><b data-en="FIRED">УВОЛЕН</b><span id="death-sub"></span></div>
+      <div id="win" hidden><div class="win-card"><small data-en="Employee of the month">Сотрудник месяца</small><b id="win-name"></b><span id="win-sub"></span><small data-en="New round in a few seconds">Новый раунд через несколько секунд</small></div></div>
+      <div class="panel fps"><span id="build" title="Версия игры" data-en-title="Game version"></span><span id="netdiag" title="Связь" data-en-title="Connection"></span><span id="fps"></span>
+        <button id="btn-mute" class="mute" title="Звук" data-en-title="Sound">🔊</button>
+        <select id="quality" title="Графика" data-en-title="Graphics">
+          <option value="low" data-en="Low">Низкая</option>
+          <option value="medium" data-en="Medium">Средняя</option>
+          <option value="high" data-en="High">Высокая</option>
         </select>
       </div>
-      <div id="btn-attack" hidden aria-label="Удар"><div id="atk-knob">✊</div></div>
+      <div id="btn-attack" hidden aria-label="Удар" data-en-aria="Attack"><div id="atk-knob">✊</div></div>
     </div>
 
     <div id="stick" hidden><div id="stick-knob"></div></div>

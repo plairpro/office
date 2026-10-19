@@ -1,5 +1,6 @@
 import mqtt, { type MqttClient } from 'mqtt'
 import { GAME, CHARACTERS, type CharacterId } from '../config/game'
+import { tr } from '../i18n'
 
 /**
  * Сжатое состояние игрока, 20 раз в секунду:
@@ -154,7 +155,7 @@ export class NetRoom {
         if (c.connected) c.publish(`${this.topic}/ping/${this.selfId}`, JSON.stringify({ f: this.selfId, s: 0, k: 'ping', d: [bi, performance.now()] }), { qos: 0 })
       })
       const now = Date.now()
-      for (const [id, t] of this.lastHeard) if (now - t > PEER_TIMEOUT) this.drop(id, `тишина ${now - t} мс`)
+      for (const [id, t] of this.lastHeard) if (now - t > PEER_TIMEOUT) this.drop(id, tr(`тишина ${now - t} мс`, `silent ${now - t} ms`))
     }, 2000)
   }
 
@@ -193,7 +194,7 @@ export class NetRoom {
     if (env.k === 'bye') {
       // «прощание» от брокера (s = -1) приходит и при коротком обрыве с одним из брокеров —
       // если игрок только что был слышен через другой, не выкидываем его
-      if (env.s >= 0 || Date.now() - (this.lastHeard.get(env.f) ?? 0) > 3000) this.drop(env.f, env.s >= 0 ? 'вышел' : 'брокер: обрыв')
+      if (env.s >= 0 || Date.now() - (this.lastHeard.get(env.f) ?? 0) > 3000) this.drop(env.f, env.s >= 0 ? tr('вышел', 'left') : tr('брокер: обрыв', 'relay dropped'))
       // иначе — «под подозрением»: если за 3 с не скажет ни слова и через другие брокеры, значит, правда ушёл
       // (закрыл вкладку или обновил страницу — прощальное сообщение при этом часто не успевает уйти)
       else if (this.lastHeard.has(env.f)) this.lastHeard.set(env.f, Math.min(this.lastHeard.get(env.f)!, Date.now() - PEER_TIMEOUT + 3000))
@@ -217,7 +218,7 @@ export class NetRoom {
         const slot = Number(d?.slot)
         const info: PeerInfo = {
           id,
-          name: String(d?.name ?? '').slice(0, 16) || 'Коллега',
+          name: String(d?.name ?? '').slice(0, 16) || tr('Коллега', 'Coworker'),
           joinedAt: Number(d?.joinedAt) || Date.now(),
           character: ch in CHARACTERS ? (ch as CharacterId) : 'courier',
           slot: Number.isInteger(slot) && slot >= 0 && slot < GAME.maxPlayers ? slot : -1,
@@ -228,7 +229,7 @@ export class NetRoom {
         // двое заняли один лифт — уступает тот, кто зашёл позже
         // если кто-то молчащий держал тот же лифт, что и новичок, — это призрак, убираем сразу
         for (const [pid, p] of this.peers) {
-          if (pid !== id && p.slot === info.slot && info.slot >= 0 && Date.now() - (this.lastHeard.get(pid) ?? 0) > SLOT_STALE) this.drop(pid, 'переподключился')
+          if (pid !== id && p.slot === info.slot && info.slot >= 0 && Date.now() - (this.lastHeard.get(pid) ?? 0) > SLOT_STALE) this.drop(pid, tr('переподключился', 'reconnected'))
         }
         if (info.slot >= 0 && info.slot === this.mySlot &&
           (info.joinedAt < this.joinedAt || (info.joinedAt === this.joinedAt && id < this.selfId))) {

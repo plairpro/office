@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { StaticBuilder, type AABB } from './builder'
 import { prop, type PackName } from '../assets'
 import { MV } from './palette'
+import { tr } from '../i18n'
 
 export interface Spawn { x: number; z: number; rot: number }
 
@@ -401,10 +402,10 @@ function slide(p: Placer, x: number, y: number, z: number, w: number, h: number)
   g.fillRect(0, 0, c.width, c.height)
   g.fillStyle = hex(MV.indigo)
   g.font = 'bold 64px system-ui, sans-serif'
-  g.fillText('ИТОГИ КВАРТАЛА', 56, 100)
+  g.fillText(tr('ИТОГИ КВАРТАЛА', 'QUARTERLY RESULTS'), 56, 100)
   g.font = '34px system-ui, sans-serif'
   g.fillStyle = hex(MV.lavender)
-  g.fillText('Мы — одна большая семья ♥', 56, 152)
+  g.fillText(tr('Мы — одна большая семья ♥', 'We are one big family ♥'), 56, 152)
   const bars = [0.35, 0.5, 0.42, 0.68, 0.95]
   const cols = [MV.mint, MV.teal, MV.lilac, MV.coral, MV.mustard]
   bars.forEach((v, i) => {

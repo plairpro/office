@@ -10,6 +10,7 @@ import { Avatar, stepBody, type Body } from './avatar'
 import { Fx } from './fx'
 import { weaponMesh, projectileMesh } from './weapons3d'
 import { sfx, type SoundName } from './sfx'
+import { tr } from '../i18n'
 import {
   F_BLEED, F_DEAD, F_INVULN, F_SLOW, F_STUN,
   type AtkMsg, type DieMsg, type HurtMsg, type PickMsg, type StatePacket,
@@ -266,7 +267,7 @@ export class Match {
   /** Манекены для тренировки в одиночку — стоят у кулера, поворачиваются, умирают как настоящие */
   addDummies(): void {
     const spots: [number, number, CharacterId][] = [[0, -1.9, 'boss'], [-2.3, 0.3, 'secretary'], [2.3, 0.3, 'accountant'], [-6.6, -7.6, 'courier']]
-    spots.forEach(([x, z, c], i) => this.makeFighter(`dummy${i}`, 'Манекен', c, MV.lavender, 'dummy', x, z, Math.random() * 6))
+    spots.forEach(([x, z, c], i) => this.makeFighter(`dummy${i}`, tr('Манекен', 'Dummy'), c, MV.lavender, 'dummy', x, z, Math.random() * 6))
   }
 
   removeDummies(): void {
@@ -608,7 +609,7 @@ export class Match {
     if (--f.uses > 0) return
     this.equip(f, 'fists')
     if (f.kind === 'local') {
-      this.fx.floatText(`${WEAPONS[w].name} сломалась!`, f.body.x, 2.3, f.body.z, '#d6455a')
+      this.fx.floatText(tr(`${WEAPONS[w].name} сломалась!`, `${WEAPONS[w].name} broke!`), f.body.x, 2.3, f.body.z, '#d6455a')
       sfx.play('empty')
     }
   }
@@ -618,7 +619,7 @@ export class Match {
     const ch = CHARACTERS[v.character]
     const wIdx = WEAPON_IDS.indexOf(w.id)
     if (ch.dodge && Math.random() < ch.dodge) {
-      this.fx.floatText('Уклон!', v.body.x, 2.2, v.body.z, '#4fb3a9')
+      this.fx.floatText(tr('Уклон!', 'Dodge!'), v.body.x, 2.2, v.body.z, '#4fb3a9')
       v.avatar.action('Dodge_Forward', 2)
       sfx.play('dodge', v.body.x, v.body.z)
       if (v.kind === 'local') this.net?.hurt({ n: 0, dx, dz, w: wIdx, k: 1, by: byId })
@@ -635,7 +636,7 @@ export class Match {
       else if (e.kind === 'stun') { if (v.stunCd <= 0) { v.stun = e.seconds; v.stunCd = e.seconds + 1.5 } }
       else if (e.kind === 'disarm') {
         // выбивает оружие из рук: подобранное теряется, и пару секунд нельзя бить даже ножом
-        if (v.disarm <= 0) this.fx.floatText(v.weapon !== 'fists' ? 'Выронил оружие!' : 'Обезоружен!', v.body.x, 2.5, v.body.z, '#9d8fd0')
+        if (v.disarm <= 0) this.fx.floatText(v.weapon !== 'fists' ? tr('Выронил оружие!', 'Dropped it!') : tr('Обезоружен!', 'Disarmed!'), v.body.x, 2.5, v.body.z, '#9d8fd0')
         if (v.weapon !== 'fists') this.equip(v, 'fists')
         v.disarm = e.seconds
       } else if (e.kind === 'knockback') {
@@ -661,7 +662,7 @@ export class Match {
     // детский режим: без «мокрых» звуков — просто глухой шлепок
     sfx.play(this.fx.gore ? HIT_SOUND[w] : 'hitBroom', v.body.x, v.body.z)
     if (w === 'lamp' || k === 2) v.avatar.action('Hit_A', 1.6)
-    const txt = k === 2 ? `В спину! ${n}` : String(n)
+    const txt = k === 2 ? tr(`В спину! ${n}`, `Backstab! ${n}`) : String(n)
     this.fx.floatText(txt, v.body.x + (Math.random() - 0.5) * 0.4, 2.3, v.body.z, k === 2 ? '#d3122a' : '#7c5a8c')
     if (w === 'lamp') this.fx.floatText('★ ★ ★', v.body.x, 2.05, v.body.z, '#f0c26c')
   }
@@ -795,7 +796,7 @@ export class Match {
         me.hp += healed
         me.bleed = 0
         me.buzz = MATCH.coffeeBuzz
-        this.fx.floatText(healed > 0 ? `+${Math.round(healed)} ☕` : 'Бодрость! ☕', me.body.x, 2.3, me.body.z, '#2f9e6a')
+        this.fx.floatText(healed > 0 ? `+${Math.round(healed)} ☕` : tr('Бодрость! ☕', 'Wired! ☕'), me.body.x, 2.3, me.body.z, '#2f9e6a')
       } else {
         if (me.weapon === k && me.ammo === (WEAPONS[k].ammo ?? -1) && me.uses === (WEAPONS[k].durability ?? -1)) return
         this.equip(me, k)
@@ -891,7 +892,7 @@ export class Match {
     if (!v || v.dead) return
     const w = WEAPON_IDS[m.w] ?? 'cutter'
     if (m.k === 1) {
-      this.fx.floatText('Уклон!', v.body.x, 2.2, v.body.z, '#4fb3a9')
+      this.fx.floatText(tr('Уклон!', 'Dodge!'), v.body.x, 2.2, v.body.z, '#4fb3a9')
       v.avatar.action('Dodge_Forward', 2)
       sfx.play('dodge', v.body.x, v.body.z)
       return

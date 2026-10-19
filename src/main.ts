@@ -9,9 +9,11 @@ import { Input } from './game/input'
 import { NetRoom, makeRoomCode, readRoomCode } from './net/room'
 import { $, showToast, loadName, saveName, loadPref, savePref } from './ui/dom'
 import { loadAssets } from './assets'
+import { tr, translateDom } from './i18n'
 
 // ---------- рендер ----------
 
+translateDom() // язык интерфейса — по языку браузера
 const host = $('game')
 // ?norender — без картинки (автотесты нескольких игроков на одной машине)
 const NORENDER = new URLSearchParams(location.search).has('norender')
@@ -97,7 +99,7 @@ const hooks: MatchHooks = {
       return b
     }
     if (killer) li.append(name(killer), ` ${WEAPON_ICON[w]} `, name(victim))
-    else li.append(name(victim), ' истёк кровью')
+    else li.append(name(victim), tr(' истёк кровью', ' bled out'))
     const feed = $('feed')
     feed.prepend(li)
     while (feed.children.length > 5) feed.lastChild!.remove()
@@ -106,7 +108,7 @@ const hooks: MatchHooks = {
   },
   onLocalHurt(n) { vignette = Math.min(1, vignette + 0.35 + n / 60) },
   onLocalDeath(killer) {
-    deathBy = killer ? `Тебя уволил(а) ${killer.name}` : 'Истёк(ла) кровью'
+    deathBy = killer ? tr(`Тебя уволил(а) ${killer.name}`, `${killer.name} fired you`) : tr('Истёк(ла) кровью', 'You bled out')
     $('death').hidden = false
   },
   onLocalRespawn() { $('death').hidden = true },
@@ -114,7 +116,7 @@ const hooks: MatchHooks = {
   onWin(w) {
     $('win-name').textContent = w.name
     $('win-name').style.color = hex(w.color)
-    $('win-sub').textContent = w === match?.local ? 'Это ты! Премия и грамота на стене.' : `${CHARACTERS[w.character].name} получает премию`
+    $('win-sub').textContent = w === match?.local ? tr('Это ты! Премия и грамота на стене.', 'That’s you! Bonus and a plaque on the wall.') : tr(`${CHARACTERS[w.character].name} получает премию`, `${CHARACTERS[w.character].name} gets the bonus`)
     $('win').hidden = false
   },
   onRoundReset() { $('win').hidden = true; renderScore() },
@@ -135,8 +137,8 @@ function rosterChanged(): void {
     else if (p.id !== net.selfId) {
       match.addRemote(p.id, p.name, p.character, color, p.slot)
       showToast(p.v && p.v !== __BUILD__
-        ? `${p.name} зашёл, но версии игры разные — обновите оба страницу`
-        : `${p.name} зашёл в офис`, p.v !== __BUILD__ ? 6000 : 2500)
+        ? tr(`${p.name} зашёл, но версии игры разные — обновите оба страницу`, `${p.name} joined, but your game versions differ — both of you reload the page`)
+        : tr(`${p.name} зашёл в офис`, `${p.name} entered the office`), p.v !== __BUILD__ ? 6000 : 2500)
       sfx.play('respawn')
     }
   }
@@ -173,11 +175,11 @@ function renderScore(): void {
   if (net) {
     const r = net.relaysOnline()
     // пока никого нет — показываем, на связи ли серверы поиска: так понятно, где ломается
-    netLine = list.length > 1 ? '' : r.open === 0 ? ' · ⚠ нет связи с сервером' : ` · связь ${r.open}/${r.total}`
+    netLine = list.length > 1 ? '' : r.open === 0 ? tr(' · ⚠ нет связи с сервером', ' · ⚠ no server connection') : tr(` · связь ${r.open}/${r.total}`, ` · link ${r.open}/${r.total}`)
   }
   $('net-status').textContent = !net
-    ? 'тренировка'
-    : `до ${MATCH.killsToWin} · ` + (free > 0 ? `мест ${free}` : 'полная') + netLine
+    ? tr('тренировка', 'practice')
+    : tr(`до ${MATCH.killsToWin} · `, `to ${MATCH.killsToWin} · `) + (free > 0 ? tr(`мест ${free}`, `${free} free`) : tr('полная', 'full')) + netLine
 }
 
 let hudKey = ''
@@ -186,12 +188,12 @@ function renderHud(force = false): void {
   if (!f) return
   const w = WEAPONS[f.weapon]
   const fx: string[] = []
-  if (f.bleed > 0) fx.push('🩸 кровотечение')
-  if (f.slow > 0) fx.push('🐌 мокрый пол')
-  if (f.stun > 0) fx.push('💫 оглушение')
-  if (f.disarm > 0) fx.push('💸 руки заняты')
-  if (f.invuln > 0) fx.push('🛡 только из лифта')
-  if (f.buzz > 0) fx.push('☕ бодрость')
+  if (f.bleed > 0) fx.push(tr('🩸 кровотечение', '🩸 bleeding'))
+  if (f.slow > 0) fx.push(tr('🐌 мокрый пол', '🐌 wet floor'))
+  if (f.stun > 0) fx.push(tr('💫 оглушение', '💫 stunned'))
+  if (f.disarm > 0) fx.push(tr('💸 руки заняты', '💸 hands full'))
+  if (f.invuln > 0) fx.push(tr('🛡 только из лифта', '🛡 fresh out of the lift'))
+  if (f.buzz > 0) fx.push(tr('☕ бодрость', '☕ caffeinated'))
   const hp = Math.max(0, Math.round(f.hp))
   const key = `${hp}|${f.weapon}|${f.ammo}|${fx.join()}|${f.dead ? Math.ceil(f.respawnIn) : ''}`
   if (key === hudKey && !force) return
@@ -201,7 +203,7 @@ function renderHud(force = false): void {
   $('weapon-name').textContent = `${WEAPON_ICON[f.weapon]} ${w.name}`
   $('ammo').textContent = f.ammo >= 0 ? `× ${f.ammo}` : ''
   $('effects').textContent = fx.join(' · ')
-  if (f.dead) $('death-sub').textContent = `${deathBy}. Лифт через ${Math.max(1, Math.ceil(f.respawnIn))}…`
+  if (f.dead) $('death-sub').textContent = `${deathBy}. ` + tr(`Лифт через ${Math.max(1, Math.ceil(f.respawnIn))}…`, `Lift in ${Math.max(1, Math.ceil(f.respawnIn))}…`)
 }
 
 // ---------- меню ----------
@@ -292,10 +294,10 @@ function renderCharacters(): void {
     const stat = (icon: string, v: string, good: boolean, title: string) =>
       v ? `<span class="${good ? 'up' : 'down'}" title="${title}">${icon} ${v}</span>` : ''
     const parts = [
-      `<span class="${c.hp >= 100 ? 'up' : 'down'}" title="Здоровье">❤️ ${c.hp}</span>`,
-      stat('🏃', pct(c.moveMul), c.moveMul > 1, 'Скорость бега'),
-      stat('⚔️', pct(c.attackSpeedMul), c.attackSpeedMul > 1, 'Скорость атаки'),
-      c.dodge ? `<span class="up" title="Шанс уклониться">🌀 ${Math.round(c.dodge * 100)}%</span>` : '',
+      `<span class="${c.hp >= 100 ? 'up' : 'down'}" title="${tr('Здоровье', 'Health')}">❤️ ${c.hp}</span>`,
+      stat('🏃', pct(c.moveMul), c.moveMul > 1, tr('Скорость бега', 'Run speed')),
+      stat('⚔️', pct(c.attackSpeedMul), c.attackSpeedMul > 1, tr('Скорость атаки', 'Attack speed')),
+      c.dodge ? `<span class="up" title="${tr('Шанс уклониться', 'Dodge chance')}">🌀 ${Math.round(c.dodge * 100)}%</span>` : '',
     ].filter(Boolean)
     btn.innerHTML = `<b>${c.name}</b><span class="info"><img src="${PORTRAITS[id]}" alt=""><span class="stats">${parts.join('')}</span></span>`
     btn.addEventListener('click', () => {
@@ -321,9 +323,9 @@ nameInput.value = myName
  */
 function setMenuMode(code: string | null): void {
   $('menu-tagline').textContent = code
-    ? `Тебя позвали в офис ${code}`
-    : 'Создай офис и позови коллег по ссылке — или войди по коду'
-  $('btn-main').textContent = code ? 'Войти' : 'Создать офис'
+    ? tr(`Тебя позвали в офис ${code}`, `You’re invited to office ${code}`)
+    : tr('Создай офис и позови коллег по ссылке — или войди по коду', 'Create an office and invite coworkers by link — or enter a code')
+  $('btn-main').textContent = code ? tr('Войти', 'Enter') : tr('Создать офис', 'Create office')
   $('join-row').hidden = !!code
   $('btn-create').hidden = !code
 }
@@ -332,14 +334,14 @@ const joinCode = $('join-code') as HTMLInputElement
 joinCode.addEventListener('input', () => { joinCode.value = joinCode.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })
 $('btn-join').addEventListener('click', () => {
   const c = joinCode.value.trim().toUpperCase()
-  if (c.length < 4) { joinCode.focus(); showToast('Введи код офиса — 4 буквы или цифры из ссылки', 2500); return }
+  if (c.length < 4) { joinCode.focus(); showToast(tr('Введи код офиса — 4 буквы или цифры из ссылки', 'Enter the office code — 4 letters or digits from the link'), 2500); return }
   void startGame(c)
 })
 joinCode.addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-join').click() })
 $('btn-create').addEventListener('click', () => void startGame(makeRoomCode()))
 
 async function startGame(code: string | null): Promise<void> {
-  myName = nameInput.value.trim().slice(0, 16) || 'Коллега'
+  myName = nameInput.value.trim().slice(0, 16) || tr('Коллега', 'Coworker')
   saveName(myName)
   setPreview(null)
   camera.clearViewOffset()
@@ -349,7 +351,7 @@ async function startGame(code: string | null): Promise<void> {
   $('btn-attack').hidden = !window.matchMedia('(pointer: coarse)').matches
 
   if (!code) {
-    $('room-code').textContent = 'соло'
+    $('room-code').textContent = tr('соло', 'solo')
     $('btn-invite').hidden = true
     match = new Match(scene, office, hooks, null)
     match.fx.gore = gore
@@ -370,7 +372,7 @@ async function startGame(code: string | null): Promise<void> {
     onPeerLeave: (id) => {
       const f = match?.fighters.get(id)
       const why = net?.stats.drops[net.stats.drops.length - 1]?.split(': ').pop() ?? ''
-      if (f) showToast(`${f.name} ушёл из офиса${why && why !== 'вышел' ? ` (${why})` : ''}`, 3500)
+      if (f) showToast(tr(`${f.name} ушёл из офиса`, `${f.name} left the office`) + (why && why !== tr('вышел', 'left') ? ` (${why})` : ''), 3500)
       match?.remove(id)
       rosterChanged()
     },
@@ -386,7 +388,7 @@ async function startGame(code: string | null): Promise<void> {
     onHurt: (id, m) => match?.onHurt(id, m),
     onDie: (id, m) => match?.onDie(id, m),
     onPick: (id, m) => match?.onPick(id, m),
-    onRoomFull: () => backToMenu('В этой комнате уже 4 человека. Создай свою и позови коллег!'),
+    onRoomFull: () => backToMenu(tr('В этой комнате уже 4 человека. Создай свою и позови коллег!', 'This office already has 4 people. Create your own and invite coworkers!')),
     onPickupSync: (c) => match?.syncPickups(c),
   })
   match = new Match(scene, office, hooks, net)
@@ -400,13 +402,13 @@ async function startGame(code: string | null): Promise<void> {
   match.fx.gore = gore
   // сначала слушаем комнату: кто уже здесь и какие лифты заняты — потом выходим из своего
   $('invite-card').hidden = true
-  showToast('Входим в офис…', 2500)
+  showToast(tr('Входим в офис…', 'Entering the office…'), 2500)
   const room = net
   const linked = await room.ready()
   if (net !== room || !match) return // успели выйти в меню
-  if (!linked) showToast('Нет связи с игровыми серверами — проверь интернет или выключи VPN. Пока можно потренироваться', 7000)
+  if (!linked) showToast(tr('Нет связи с игровыми серверами — проверь интернет или выключи VPN. Пока можно потренироваться', 'Can’t reach the game servers — check your internet or turn off VPN. You can practice meanwhile'), 7000)
   const slot = room.claimSlot()
-  if (slot < 0) { backToMenu('В этой комнате уже 4 человека. Создай свою и позови коллег!'); return }
+  if (slot < 0) { backToMenu(tr('В этой комнате уже 4 человека. Создай свою и позови коллег!', 'This office already has 4 people. Create your own and invite coworkers!')); return }
   match.addLocal(room.selfId, myName, myChar, PLAYER_COLORS[slot], slot)
   spawnedAt = performance.now()
   if (room.peers.size === 0) {
@@ -446,23 +448,23 @@ function inviteUrl(code: string): string {
 
 // одно действие: на телефоне — меню «Поделиться», на компьютере — копируем ссылку
 const canShare = !!navigator.share && window.matchMedia('(pointer: coarse)').matches
-$('ic-copy').textContent = 'Пригласить'
+$('ic-copy').textContent = tr('Пригласить', 'Invite')
 
 async function sendInvite(): Promise<void> {
   if (!net) return
   const url = inviteUrl(net.code)
-  const text = `${myName} зовёт тебя в «Офис»`
+  const text = tr(`${myName} зовёт тебя в «Офис»`, `${myName} invites you to “Office”`)
   if (canShare) {
-    try { await navigator.share({ title: 'Офис', text, url }); return } catch { /* отменили — скопируем */ }
+    try { await navigator.share({ title: tr('Офис', 'Office'), text, url }); return } catch { /* отменили — скопируем */ }
   }
   try {
     await navigator.clipboard.writeText(`${text}: ${url}`)
     const b = $('ic-copy')
-    b.textContent = 'Приглашение скопировано ✓'
-    setTimeout(() => { b.textContent = 'Пригласить' }, 2000)
-    showToast('Приглашение скопировано — вставь его в чат коллегам', 3000)
+    b.textContent = tr('Приглашение скопировано ✓', 'Invite copied ✓')
+    setTimeout(() => { b.textContent = tr('Пригласить', 'Invite') }, 2000)
+    showToast(tr('Приглашение скопировано — вставь его в чат коллегам', 'Invite copied — paste it into your team chat'), 3000)
   } catch {
-    window.prompt('Скопируй ссылку и отправь коллегам:', url)
+    window.prompt(tr('Скопируй ссылку и отправь коллегам:', 'Copy the link and send it to coworkers:'), url)
   }
 }
 $('ic-copy').addEventListener('click', () => void sendInvite())
@@ -474,10 +476,10 @@ $('ic-link').addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText(url)
     el.classList.add('copied')
-    el.textContent = 'Ссылка скопирована ✓'
+    el.textContent = tr('Ссылка скопирована ✓', 'Link copied ✓')
     setTimeout(() => { el.classList.remove('copied'); el.textContent = url }, 1500)
   } catch {
-    window.prompt('Скопируй ссылку:', url)
+    window.prompt(tr('Скопируй ссылку:', 'Copy the link:'), url)
   }
 })
 $('ic-close').addEventListener('click', () => { $('invite-card').hidden = true })
@@ -583,7 +585,7 @@ function frame(time: number): void {
       // диагностика связи в настройках: серверы, входящие сообщения в секунду, обрывы, последняя потеря игрока
       const st = net.stats, r = net.relaysOnline()
       const rx = st.rx.reduce((a, b) => a + b, 0)
-      $('netdiag').textContent = `связь ${r.open}/${r.total} · пинг ${st.rtt.map((v) => (v ? Math.round(v) : '–')).join('/')} мс · ↓${Math.round((rx - lastRx) / diagAcc)}/с · обрывы ${st.closes.join('/')}` + (st.drops.length ? ` · ${st.drops[st.drops.length - 1]}` : '')
+      $('netdiag').textContent = tr('связь', 'link') + ` ${r.open}/${r.total} · ` + tr('пинг', 'ping') + ` ${st.rtt.map((v) => (v ? Math.round(v) : '–')).join('/')} ` + tr('мс', 'ms') + ` · ↓${Math.round((rx - lastRx) / diagAcc)}/` + tr('с', 's') + ' · ' + tr('обрывы', 'drops') + ` ${st.closes.join('/')}` + (st.drops.length ? ` · ${st.drops[st.drops.length - 1]}` : '')
       lastRx = rx
       diagAcc = 0
     }
