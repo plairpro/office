@@ -89,6 +89,20 @@ let healFlash = 0
 let spawnedAt = 0
 let deathBy = ''
 
+// ---------- PLAIR SDK (лента plair.pro): рекорды, таблица лидеров, вызовы «побей мой рекорд» ----------
+// Игра работает и без него: все вызовы — только если sdk.js загрузился.
+type PlairSdk = { score(n: number, o?: { lowerIsBetter?: boolean }): void; onChallenge(cb: (c: { score: number; name?: string }) => void): void }
+const plair = (): PlairSdk | undefined => (window as unknown as { PLAIR?: PlairSdk }).PLAIR
+let challenge: { score: number; name?: string } | null = null
+try {
+  plair()?.onChallenge((c) => {
+    if (!c || !Number.isFinite(Number(c.score))) return
+    challenge = { score: Number(c.score), name: c.name }
+    showToast(tr(`Побей рекорд${c.name ? ` ${c.name}` : ''}: ${challenge.score} убийств за раунд`, `Beat ${challenge.score}${c.name ? ` — ${c.name}’s record` : ''} (kills in a round)`), 5000)
+    renderScore()
+  })
+} catch { /* SDK недоступен — играем как обычно */ }
+
 const hooks: MatchHooks = {
   onKill(killer, victim, w) {
     const li = document.createElement('li')
@@ -114,6 +128,9 @@ const hooks: MatchHooks = {
   onLocalRespawn() { $('death').hidden = true },
   onShake(p) { shake = Math.max(shake, p) },
   onWin(w) {
+    // раунд окончен (кто-то набрал 10 убийств) — один раз отправляем свой результат: убийства за раунд
+    const me = match?.local
+    if (me) try { plair()?.score(me.kills) } catch { /* без ленты — ничего */ }
     $('win-name').textContent = w.name
     $('win-name').style.color = hex(w.color)
     $('win-sub').textContent = w === match?.local ? tr('Это ты! Премия и грамота на стене.', 'That’s you! Bonus and a plaque on the wall.') : tr(`${CHARACTERS[w.character].name} получает премию`, `${CHARACTERS[w.character].name} gets the bonus`)
@@ -177,9 +194,9 @@ function renderScore(): void {
     // пока никого нет — показываем, на связи ли серверы поиска: так понятно, где ломается
     netLine = list.length > 1 ? '' : r.open === 0 ? tr(' · ⚠ нет связи с сервером', ' · ⚠ no server connection') : tr(` · связь ${r.open}/${r.total}`, ` · link ${r.open}/${r.total}`)
   }
-  $('net-status').textContent = !net
+  $('net-status').textContent = (challenge ? tr(`🎯 побей ${challenge.score} · `, `🎯 Beat ${challenge.score} · `) : '') + (!net
     ? tr('тренировка', 'practice')
-    : tr(`до ${MATCH.killsToWin} · `, `to ${MATCH.killsToWin} · `) + (free > 0 ? tr(`мест ${free}`, `${free} free`) : tr('полная', 'full')) + netLine
+    : tr(`до ${MATCH.killsToWin} · `, `to ${MATCH.killsToWin} · `) + (free > 0 ? tr(`мест ${free}`, `${free} free`) : tr('полная', 'full')) + netLine)
 }
 
 let hudKey = ''
